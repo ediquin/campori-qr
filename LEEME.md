@@ -15,10 +15,17 @@ aplicaciones. Son archivos HTML, CSS y JavaScript que el navegador abre tal cual
 | Físicos | 14 disponibles | 200 | Solo cuentan los **8 primeros escaneados** | **1600** |
 | Espirituales | 7 | 200 | Los 7 son **obligatorios** | **1400** |
 | **Puntaje base** | | | | **3000** |
-| Adicional | 29 eventos | 100 | Cada evento cuenta una vez y suma **aparte** del puntaje base | — |
+| Adicional | 33 eventos | 100 / 200 / 500 | Cada evento cuenta una vez y suma **aparte** del puntaje base | — |
+| Sanciones | 3 | −2000 / −500 | Restan del total; se pueden repetir (varios días) | — |
 
-No hay rúbrica ni puestos: cada evento físico o espiritual suma 200 y cada
-evento adicional suma 100.
+No hay rúbrica ni puestos: los físicos y espirituales suman 200; los adicionales
+suman lo que dice el catálogo (los 29 originales 100, y Botiquín 500, Plaza del
+Aventurero / Seguridad / Limpieza Km4 200).
+
+Las **sanciones** restan puntaje. Una misma sanción puede aplicarse varias veces (con
+stickers distintos), pero el mismo sticker no resta dos veces. El **total nunca baja
+de 0**: una sanción se come los puntos que el club tenga y no más. En el evaluador se
+ven en rojo, y en el Excel hay columnas de "Sanciones" y "Puntos sanción".
 
 Lo que el sistema detecta solo:
 
@@ -35,23 +42,28 @@ Lo que el sistema detecta solo:
 
 ### 1. Antes del campori — configurar
 
-Abrí `js/catalogo.js` y cambiá dos cosas:
+Abrí `js/catalogo.js`. Ahí están los eventos, sus puntajes y las sanciones: es el
+único archivo que hay que tocar si algo de eso cambia. Agregá eventos nuevos **al
+final** (con códigos nuevos), nunca renumeres los existentes: los QR ya impresos
+dependen de su código.
 
-```js
-clave: 'aventuri-2026-de-vuelta-a-casa',   // ← poné una frase propia
-```
-
-Esa clave firma los códigos QR. **Cambiala antes de imprimir** y no la publiques.
-Si la cambiás después de imprimir, los stickers ya impresos dejan de validar.
-
-Más abajo, `CRITERIOS_ADICIONALES` contiene los 29 eventos adicionales oficiales.
-Todos valen 100 puntos y cada uno puede sumar una sola vez por club.
+- `CRITERIOS_ADICIONALES`: los 33 eventos adicionales. Los primeros 29 valen 100; los
+  últimos cuatro valen 500 (Botiquín) y 200 (Plaza / Seguridad / Limpieza Km4).
+- `SANCIONES`: las tres que restan (`S01`–`S03`).
+- `clave`: hoy solo firma el QR de cabecera del club, no los stickers de evento. No
+  hace falta cambiarla salvo que quieras.
 
 ### 2. Imprimir
 
 Abrí `generador.html`:
 
-Elegí los eventos y cuántos QR necesitás por evento (80 alcanza: son 71 clubes).
+Elegí los eventos y cuántos QR necesitás por evento (80 alcanza: son 71 clubes). Las
+**sanciones vienen destildadas** a propósito: marcá solo las que vayas a usar, y pocas.
+
+Cada evento se imprime como un **bloque con su título encima de sus QR** (por ejemplo
+"A30 · BOTIQUÍN · 500 pts · 15 QR"), así al recortar cada lote queda rotulado. Varios
+eventos chicos comparten hoja, cada uno con su título; un evento largo continúa en la
+hoja siguiente repitiendo el título con el rango.
 Después elegí el tamaño de papel: **Oficio (21,5 × 33 cm)** admite 204 QR y
 **Carta (21,6 × 28,15 cm)** admite 168 QR. En ambos casos cada QR conserva 15 mm.
 Los eventos se acomodan de forma continua para aprovechar el espacio restante; la

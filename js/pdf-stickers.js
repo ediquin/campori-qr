@@ -42,6 +42,9 @@ const PASO_X_MM = 16.5;
 const PASO_Y_MM = 18;
 const ALTO_STICKER_MM = 17.5;
 const BAJADA_REJILLA_MM = 13.5;
+// Cada evento arranca su propio bloque con una banda de titulo encima de sus QR.
+const ALTO_TITULO_MM = 7;        // alto de la banda de titulo de cada evento
+const MARGEN_INFERIOR_MM = 6;    // aire que se deja abajo de la ultima fila
 
 const pt = mm => mm * PUNTOS_POR_MM;
 const numero = n => Number(n.toFixed(3)).toString();
@@ -78,36 +81,62 @@ function anchoAproximado(texto, tamano, factor = 0.5) {
   return bytesWinAnsi(texto).length * tamano * factor;
 }
 
+// Alto vertical utilizable de una hoja para bloques de eventos (en mm).
+function alturaDisponibleMm(formato) {
+  return (formato.altoMm - BAJADA_REJILLA_MM) - MARGEN_INFERIOR_MM;
+}
+
+// Alto que ocupa un bloque: la banda de titulo mas sus filas de QR.
+function altoBloqueMm(filas) {
+  return ALTO_TITULO_MM + filas * PASO_Y_MM;
+}
+
 /**
- * Llena cada pagina antes de abrir la siguiente. Una pagina puede contener varios
- * eventos y cada aparicion queda registrada como un bloque. Asi no se desperdicia
- * el resto de la hoja y un evento que continua conserva su nombre y rango.
+ * Agrupa los QR por evento. Cada evento arranca su propio bloque con una banda de
+ * titulo encima de sus codigos. Los bloques se apilan de arriba hacia abajo; varios
+ * eventos chicos comparten hoja, pero cada uno con su titulo, y un evento que no
+ * entra completo continua en la hoja siguiente repitiendo el titulo.
  *
- * Esta funcion se exporta para que la vista previa y el PDF usen exactamente la
- * misma distribucion, y para probar la paginacion sin fabricar cientos de QR.
+ * Antes se empaquetaba "de corrido" (los eventos fluian sin separacion). Se cambio a
+ * bloques con titulo por pedido: al recortar, cada lote queda claramente rotulado.
+ *
+ * Se exporta para que la vista previa y el PDF usen la misma distribucion, y para
+ * poder probar la paginacion sin fabricar cientos de QR.
  */
 export function planificarPaginas(grupos = [], formatoPapel = FORMATO_PAPEL_PREDETERMINADO) {
   const formato = obtenerFormatoPapel(formatoPapel);
-  const capacidad = formato.capacidad;
+  const columnas = formato.columnas;
+  const disponible = alturaDisponibleMm(formato);
   const paginas = [];
-  let actual = { stickers: [], bloques: [], formatoPapel: formato.id };
+  let pagina = null;
+  let usado = 0;   // mm ya ocupados desde el inicio del cuerpo de la hoja
 
-  const cerrarPagina = () => {
-    if (!actual.stickers.length) return;
-    paginas.push(actual);
-    actual = { stickers: [], bloques: [], formatoPapel: formato.id };
+  const nuevaPagina = () => {
+    pagina = { stickers: [], bloques: [], formatoPapel: formato.id };
+    paginas.push(pagina);
+    usado = 0;
   };
 
   grupos.forEach((grupo, indiceGrupo) => {
     const stickers = Array.isArray(grupo.stickers) ? grupo.stickers : [];
+    if (!stickers.length) return;
+
     let desdeEvento = 0;
     let paginaEvento = 0;
 
     while (desdeEvento < stickers.length) {
-      if (actual.stickers.length === capacidad) cerrarPagina();
+      if (!pagina) nuevaPagina();
 
-      const disponibles = capacidad - actual.stickers.length;
-      const cantidad = Math.min(disponibles, stickers.length - desdeEvento);
+      const libre = disponible - usado;
+      // Un bloque necesita al menos su titulo y una fila de QR. Si no entra, se
+      // pasa a una hoja nueva antes de empezar el evento (o de continuarlo).
+      if (libre < altoBloqueMm(1)) { pagina = null; continue; }
+
+      const filasQueEntran = Math.floor((libre - ALTO_TITULO_MM) / PASO_Y_MM);
+      const filasQueFaltan = Math.ceil((stickers.length - desdeEvento) / columnas);
+      const filas = Math.min(filasQueEntran, filasQueFaltan);
+      const cantidad = Math.min(stickers.length - desdeEvento, filas * columnas);
+
       const tomados = stickers.slice(desdeEvento, desdeEvento + cantidad).map(sticker => ({
         ...sticker,
         codigo: grupo.codigo,
@@ -116,73 +145,65 @@ export function planificarPaginas(grupos = [], formatoPapel = FORMATO_PAPEL_PRED
       }));
 
       paginaEvento++;
-      actual.bloques.push({
+      pagina.bloques.push({
         codigo: grupo.codigo,
         nombre: grupo.nombre,
         puntos: grupo.puntos,
         indiceGrupo,
-        inicioCelda: actual.stickers.length,
         stickers: tomados,
+        filas,
         desdeEvento,
         hastaEvento: desdeEvento + cantidad,
         totalEvento: stickers.length,
         paginaEvento,
         paginasEvento: 0,
       });
-      actual.stickers.push(...tomados);
+      pagina.stickers.push(...tomados);
+      usado += altoBloqueMm(filas);
       desdeEvento += cantidad;
+
+      // Si el evento no entro completo, lo que resta va en una hoja nueva.
+      if (desdeEvento < stickers.length) pagina = null;
     }
   });
-  cerrarPagina();
 
   const paginasPorGrupo = new Map();
-  for (const pagina of paginas) {
-    for (const bloque of pagina.bloques) {
+  for (const p of paginas) {
+    for (const bloque of p.bloques) {
       paginasPorGrupo.set(bloque.indiceGrupo, (paginasPorGrupo.get(bloque.indiceGrupo) || 0) + 1);
     }
   }
 
-  paginas.forEach((pagina, i) => {
-    pagina.numeroPagina = i + 1;
-    pagina.paginasTotal = paginas.length;
-    pagina.bloques.forEach(bloque => {
+  paginas.forEach((p, i) => {
+    p.numeroPagina = i + 1;
+    p.paginasTotal = paginas.length;
+    p.bloques.forEach(bloque => {
       bloque.paginasEvento = paginasPorGrupo.get(bloque.indiceGrupo) || 1;
     });
   });
   return paginas;
 }
 
-function rotuloBloque(bloque) {
+/**
+ * Titulo de la banda de un evento: "A30 · BOTIQUÍN · 500 pts · 15 QR". Si el evento
+ * se parte entre hojas, muestra el rango: "(16-30 de 40)".
+ */
+export function rotuloBloque(bloque) {
   const cantidad = bloque.hastaEvento - bloque.desdeEvento;
   const rango = bloque.paginasEvento > 1
-    ? ` [${bloque.desdeEvento + 1}-${bloque.hastaEvento} de ${bloque.totalEvento}]`
-    : ` [${cantidad}]`;
-  return `${bloque.codigo} - ${bloque.nombre}${rango}`;
+    ? ` (${bloque.desdeEvento + 1}-${bloque.hastaEvento} de ${bloque.totalEvento})`
+    : '';
+  const puntos = `${bloque.puntos} pts`;
+  return `${bloque.codigo} · ${bloque.nombre} · ${puntos} · ${cantidad} QR${rango}`;
 }
 
-/**
- * Resume los bloques que aparecen en una hoja. En cantidades normales caben los
- * nombres completos; si se eligieron muchos eventos con muy pocos QR, abrevia el
- * final sin ocultar el evento que viene continuado desde la pagina anterior.
- */
-export function resumirPagina(pagina, maxCaracteres = 155) {
+/** Lista corta de los eventos que aparecen en una hoja, para el encabezado. */
+export function resumirPagina(pagina) {
   const bloques = Array.isArray(pagina?.bloques) ? pagina.bloques : [];
-  if (!bloques.length) return '';
-
-  let resumen = '';
-  for (let i = 0; i < bloques.length; i++) {
-    const parte = rotuloBloque(bloques[i]);
-    const candidato = resumen ? `${resumen} | ${parte}` : parte;
-    const restantes = bloques.length - i - 1;
-    const sufijo = restantes ? ` | +${restantes} evento${restantes === 1 ? '' : 's'}` : '';
-
-    if (candidato.length + sufijo.length <= maxCaracteres || !resumen) {
-      resumen = candidato;
-      continue;
-    }
-    return `${resumen} | +${bloques.length - i} evento${bloques.length - i === 1 ? '' : 's'}`;
-  }
-  return resumen;
+  const nombres = [...new Set(bloques.map(b => b.nombre))];
+  if (!nombres.length) return '';
+  if (nombres.length <= 3) return nombres.join(' · ');
+  return `${nombres.slice(0, 2).join(' · ')} · +${nombres.length - 2} eventos`;
 }
 
 function qrPdf(texto, xMm, yMm) {
@@ -211,61 +232,77 @@ function qrPdf(texto, xMm, yMm) {
 
 async function contenidoPagina(pagina, campori, progreso, formato) {
   const comandos = [];
-  const izquierda = resumirPagina(pagina);
   const derecha = `${campori} - ${formato.nombre} - hoja ${pagina.numeroPagina}/${pagina.paginasTotal} - ${pagina.stickers.length} stickers`;
   const izquierdaRejilla = (formato.anchoMm - formato.columnas * PASO_X_MM) / 2;
-  const arribaRejilla = formato.altoMm - BAJADA_REJILLA_MM;
-  const yTitulo = formato.altoMm - 7;
-  const yDetalle = formato.altoMm - 10.3;
-  const yLinea = formato.altoMm - 11.5;
+  const yDetalle = formato.altoMm - 8;
+  const yLinea = formato.altoMm - 9.5;
   const derechaPagina = formato.anchoMm - 7;
 
-  let tamanoTitulo = 8.5;
-  while (tamanoTitulo > 5.5 &&
-         anchoAproximado(izquierda, tamanoTitulo, 0.52) > pt(formato.anchoMm - 14)) {
-    tamanoTitulo -= 0.5;
-  }
-  comandos.push(textoPdf(izquierda, pt(7), pt(yTitulo), { fuente: 'F2', tamano: tamanoTitulo }));
+  // Encabezado minimo: los titulos de cada evento ahora van en el cuerpo.
+  comandos.push(textoPdf('Hoja de stickers', pt(7), pt(yDetalle), { fuente: 'F2', tamano: 8.5 }));
   const xDerecha = Math.max(pt(7), pt(derechaPagina) - anchoAproximado(derecha, 7, 0.48));
   comandos.push(textoPdf(derecha, xDerecha, pt(yDetalle), { tamano: 7 }));
   comandos.push(`0 G ${numero(pt(0.3))} w ${numero(pt(7))} ${numero(pt(yLinea))} m ${numero(pt(derechaPagina))} ${numero(pt(yLinea))} l S`);
 
-  // Guias de corte. Se dibujan primero para que nunca tapen los modulos del QR.
-  comandos.push(`0.75 G ${numero(pt(0.15))} w [${numero(pt(0.6))} ${numero(pt(0.6))}] 0 d`);
-  pagina.stickers.forEach((_, i) => {
-    const columna = i % formato.columnas;
-    const fila = Math.floor(i / formato.columnas);
-    const x = izquierdaRejilla + columna * PASO_X_MM;
-    const y = arribaRejilla - fila * PASO_Y_MM - ALTO_STICKER_MM;
-    comandos.push(`${numero(pt(x))} ${numero(pt(y))} ${numero(pt(LADO_QR_MM))} ${numero(pt(ALTO_STICKER_MM))} re S`);
-  });
-  comandos.push('[] 0 d 0 G');
+  // Recorremos los bloques de arriba hacia abajo. `yCursor` es el borde superior del
+  // bloque en curso, en mm desde el pie de la hoja (coordenadas del PDF).
+  let yCursor = formato.altoMm - BAJADA_REJILLA_MM;
 
-  for (let i = 0; i < pagina.stickers.length; i++) {
-    const sticker = pagina.stickers[i];
-    const columna = i % formato.columnas;
-    const fila = Math.floor(i / formato.columnas);
-    const x = izquierdaRejilla + columna * PASO_X_MM;
-    const arriba = arribaRejilla - fila * PASO_Y_MM;
-    const yQr = arriba - LADO_QR_MM;
-    comandos.push(qrPdf(sticker.texto, x, yQr));
-
-    const rotulo = `${sticker.codigo}-${sticker.puntos} ${sticker.serial}`;
-    const tamano = 4;
-    const ancho = anchoAproximado(rotulo, tamano, 0.6);
-    const xRotulo = pt(x) + (pt(LADO_QR_MM) - ancho) / 2;
-    comandos.push(textoPdf(rotulo, xRotulo, pt(yQr - 1.45), { fuente: 'F3', tamano }));
-
-    progreso.hechos++;
-    progreso.alAvanzar?.({
-      hechos: progreso.hechos,
-      total: progreso.total,
-      pagina: progreso.pagina,
-      paginas: progreso.paginas,
-    });
-    if (progreso.cederCada > 0 && progreso.hechos % progreso.cederCada === 0) {
-      await new Promise(resolve => setTimeout(resolve, 0));
+  for (const bloque of pagina.bloques) {
+    // Banda de titulo del evento.
+    const titulo = rotuloBloque(bloque);
+    let tamanoTitulo = 8.5;
+    while (tamanoTitulo > 5.5 &&
+           anchoAproximado(titulo, tamanoTitulo, 0.52) > pt(formato.anchoMm - 14)) {
+      tamanoTitulo -= 0.5;
     }
+    const yTexto = yCursor - ALTO_TITULO_MM + 2.2;
+    comandos.push(textoPdf(titulo, pt(7), pt(yTexto), { fuente: 'F2', tamano: tamanoTitulo }));
+    // Linea fina bajo el titulo, ancho de la rejilla.
+    const yBajoTitulo = yCursor - ALTO_TITULO_MM + 0.6;
+    comandos.push(`0.6 G ${numero(pt(0.2))} w ${numero(pt(izquierdaRejilla))} ${numero(pt(yBajoTitulo))} m ${numero(pt(izquierdaRejilla + formato.columnas * PASO_X_MM))} ${numero(pt(yBajoTitulo))} l S 0 G`);
+
+    const arribaRejilla = yCursor - ALTO_TITULO_MM;
+
+    // Guias de corte de este bloque.
+    comandos.push(`0.75 G ${numero(pt(0.15))} w [${numero(pt(0.6))} ${numero(pt(0.6))}] 0 d`);
+    bloque.stickers.forEach((_, i) => {
+      const columna = i % formato.columnas;
+      const fila = Math.floor(i / formato.columnas);
+      const x = izquierdaRejilla + columna * PASO_X_MM;
+      const y = arribaRejilla - fila * PASO_Y_MM - ALTO_STICKER_MM;
+      comandos.push(`${numero(pt(x))} ${numero(pt(y))} ${numero(pt(LADO_QR_MM))} ${numero(pt(ALTO_STICKER_MM))} re S`);
+    });
+    comandos.push('[] 0 d 0 G');
+
+    for (let i = 0; i < bloque.stickers.length; i++) {
+      const sticker = bloque.stickers[i];
+      const columna = i % formato.columnas;
+      const fila = Math.floor(i / formato.columnas);
+      const x = izquierdaRejilla + columna * PASO_X_MM;
+      const arriba = arribaRejilla - fila * PASO_Y_MM;
+      const yQr = arriba - LADO_QR_MM;
+      comandos.push(qrPdf(sticker.texto, x, yQr));
+
+      const rotulo = `${sticker.codigo}·${sticker.puntos} ${sticker.serial}`;
+      const tamano = 4;
+      const ancho = anchoAproximado(rotulo, tamano, 0.6);
+      const xRotulo = pt(x) + (pt(LADO_QR_MM) - ancho) / 2;
+      comandos.push(textoPdf(rotulo, xRotulo, pt(yQr - 1.45), { fuente: 'F3', tamano }));
+
+      progreso.hechos++;
+      progreso.alAvanzar?.({
+        hechos: progreso.hechos,
+        total: progreso.total,
+        pagina: progreso.pagina,
+        paginas: progreso.paginas,
+      });
+      if (progreso.cederCada > 0 && progreso.hechos % progreso.cederCada === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+
+    yCursor -= altoBloqueMm(bloque.filas);
   }
 
   return `${comandos.join('\n')}\n`;

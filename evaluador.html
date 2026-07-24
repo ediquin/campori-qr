@@ -88,6 +88,7 @@
   .marcador .rotulo { font-size: .62rem; color: var(--tenue); text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
   .marcador.completo .valor { color: var(--ok); }
   .marcador.falta .valor { color: var(--aviso); }
+  .marcador.sancion .valor { color: var(--alerta); }
 
   .linea-escaneo {
     display: flex; align-items: center; gap: 10px;
@@ -98,6 +99,7 @@
   .linea-escaneo .desc .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .linea-escaneo .desc .por { font-size: .7rem; color: var(--tenue); }
   .linea-escaneo .pts { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .pts.resta, td.num.resta { color: var(--alerta); }
   .linea-escaneo .quitar { flex: 0 0 auto; padding: 4px 8px; font-size: .7rem; }
 
   #barra-club {
@@ -221,6 +223,7 @@
         <div class="marcador" id="m-fisicos"><div class="valor">0/8</div><div class="rotulo">Físicos</div></div>
         <div class="marcador" id="m-espirituales"><div class="valor">0/7</div><div class="rotulo">Espirit.</div></div>
         <div class="marcador" id="m-adicional"><div class="valor">0</div><div class="rotulo">Adicional</div></div>
+        <div class="marcador sancion" id="m-sancion" hidden><div class="valor">0</div><div class="rotulo">Sanción</div></div>
         <div class="marcador" id="m-total"><div class="valor">0</div><div class="rotulo">Total</div></div>
       </div>
 
@@ -256,7 +259,7 @@
           <thead><tr>
             <th>Club</th><th>Región</th>
             <th class="num">Fís.</th><th class="num">Esp.</th><th class="num">Adic.</th>
-            <th class="num">Total</th><th>Estado</th>
+            <th class="num">Sanc.</th><th class="num">Total</th><th>Estado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -362,6 +365,6 @@
   <button data-vista="ajustes">Ajustes</button>
 </nav>
 
-<script type="module" src="js/evaluador.js?v=9"></script>
+<script type="module" src="js/evaluador.js?v=10"></script>
 </body>
 </html>

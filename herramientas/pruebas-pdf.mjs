@@ -6,7 +6,7 @@
 import {
   FORMATOS_PAPEL, obtenerFormatoPapel,
   ANCHO_PAGINA_MM, ALTO_PAGINA_MM, LADO_QR_MM, STICKERS_POR_PAGINA,
-  planificarPaginas, resumirPagina, crearPdfStickers,
+  planificarPaginas, resumirPagina, rotuloBloque, crearPdfStickers,
 } from '../js/pdf-stickers.js';
 import { armarSticker } from '../js/codigo.js';
 import { readFile } from 'node:fs/promises';
@@ -42,56 +42,63 @@ comprobar('capacidad de una hoja carta', FORMATOS_PAPEL.carta.capacidad, 168);
 comprobar('un formato desconocido vuelve a oficio',
   obtenerFormatoPapel('desconocido').id, 'oficio');
 
-const exacta = planificarPaginas([grupo('A01', 204)]);
-comprobar('204 stickers ocupan una hoja', exacta.length, 1);
-comprobar('la hoja exacta conserva los 204', exacta[0].stickers.length, 204);
-comprobar('la hoja exacta registra un bloque de evento', exacta[0].bloques.length, 1);
+// Cada evento es su propio bloque con titulo. Un evento chico entra completo.
+const unoChico = planificarPaginas([grupo('A01', 15)]);
+comprobar('un evento chico entra en una hoja', unoChico.length, 1);
+comprobar('el evento chico es un unico bloque', unoChico[0].bloques.length, 1);
+comprobar('el bloque conserva sus 15 QR', unoChico[0].bloques[0].stickers.length, 15);
 
-const excedida = planificarPaginas([grupo('A01', 205)]);
-comprobar('205 stickers ocupan dos hojas', excedida.length, 2);
-comprobar('la segunda hoja recibe solamente el excedente',
-  excedida.map(p => p.stickers.length), [204, 1]);
-comprobar('el nombre del evento se repite cuando continua',
-  excedida.map(p => p.bloques[0].nombre), ['Evento A01', 'Evento A01']);
+// Un evento grande se parte entre hojas, repitiendo su titulo con el rango. En
+// oficio, la banda de titulo deja lugar para 16 filas: 192 QR por hoja.
+const grande = planificarPaginas([grupo('A01', 200)]);
+comprobar('200 QR de un evento ocupan dos hojas oficio',
+  grande.map(p => p.stickers.length), [192, 8]);
+comprobar('el evento continuado mantiene su codigo en cada hoja',
+  grande.map(p => p.bloques[0].codigo), ['A01', 'A01']);
 comprobar('los rangos del evento continuado son consecutivos',
-  excedida.map(p => [p.bloques[0].desdeEvento, p.bloques[0].hastaEvento]),
-  [[0, 204], [204, 205]]);
-comprobar('cada cabecera identifica el evento continuado',
-  excedida.map(p => resumirPagina(p).includes('A01 - Evento A01')),
-  [true, true]);
+  grande.map(p => [p.bloques[0].desdeEvento, p.bloques[0].hastaEvento]),
+  [[0, 192], [192, 200]]);
+comprobar('cada bloque sabe en cuantas hojas cae su evento',
+  grande.map(p => p.bloques[0].paginasEvento), [2, 2]);
+comprobar('el titulo del bloque muestra codigo, nombre, puntos y rango',
+  rotuloBloque(grande[0].bloques[0]),
+  'A01 · Evento A01 · 100 pts · 192 QR (1-192 de 200)');
 
 const dosEventos = planificarPaginas([grupo('A01', 1), grupo('A02', 1)]);
-comprobar('dos eventos aprovechan la misma hoja', dosEventos.length, 1);
-comprobar('la hoja compartida conserva ambos bloques en orden',
+comprobar('dos eventos chicos comparten la misma hoja', dosEventos.length, 1);
+comprobar('cada evento es su propio bloque, en orden',
   dosEventos[0].bloques.map(b => b.codigo), ['A01', 'A02']);
 
 const tresTandas = planificarPaginas([
   grupo('A01', 80), grupo('A02', 80), grupo('A03', 80),
 ]);
-comprobar('los eventos llenan la hoja antes de abrir otra',
-  tresTandas.map(p => p.stickers.length), [204, 36]);
-comprobar('el tercer evento usa el sobrante y continua en la hoja siguiente',
+comprobar('los eventos chicos se apilan y el que no entra continua',
+  tresTandas.map(p => p.stickers.length), [184, 56]);
+comprobar('cada evento arranca su propio bloque',
+  tresTandas[0].bloques.map(b => b.codigo), ['A01', 'A02', 'A03']);
+comprobar('el tercer evento parte 24 en la primera hoja y sigue con 56',
   tresTandas.map(p => p.bloques.filter(b => b.codigo === 'A03').map(b => b.stickers.length)),
-  [[44], [36]]);
+  [[24], [56]]);
 comprobar('las paginas llevan numeracion global',
   tresTandas.map(p => [p.numeroPagina, p.paginasTotal]), [[1, 2], [2, 2]]);
+comprobar('resumirPagina lista los eventos de la hoja',
+  resumirPagina(tresTandas[0]), 'Evento A01 · Evento A02 · Evento A03');
 comprobar('un grupo vacio no crea paginas', planificarPaginas([grupo('A01', 0)]).length, 0);
 
-const cartaExacta = planificarPaginas([grupo('A01', 168)], 'carta');
-comprobar('168 stickers ocupan una hoja carta', cartaExacta.map(p => p.stickers.length), [168]);
-const cartaExcedida = planificarPaginas([grupo('A01', 169)], 'carta');
-comprobar('169 stickers carta se reparten sin recorte',
-  cartaExcedida.map(p => p.stickers.length), [168, 1]);
-comprobar('carta repite el nombre del evento continuado',
-  cartaExcedida.map(p => resumirPagina(p).includes('A01 - Evento A01')), [true, true]);
-const tresTandasCarta = planificarPaginas([
-  grupo('A01', 80), grupo('A02', 80), grupo('A03', 80),
-], 'carta');
-comprobar('carta llena 168 posiciones antes de abrir otra hoja',
-  tresTandasCarta.map(p => p.stickers.length), [168, 72]);
-comprobar('el tercer evento usa 8 espacios carta y continua con 72',
-  tresTandasCarta.map(p => p.bloques.filter(b => b.codigo === 'A03').map(b => b.stickers.length)),
-  [[8], [72]]);
+// Carta: la banda de titulo deja lugar para 14 filas, 168 QR por hoja.
+const cartaGrande = planificarPaginas([grupo('A01', 200)], 'carta');
+comprobar('200 QR en carta se reparten 168 + 32',
+  cartaGrande.map(p => p.stickers.length), [168, 32]);
+comprobar('carta mantiene el evento continuado',
+  cartaGrande.map(p => p.bloques[0].codigo), ['A01', 'A01']);
+
+// Un evento de sancion (puntos negativos) se pagina igual y su titulo lo refleja.
+const sancion = planificarPaginas([
+  { codigo: 'S01', nombre: 'Infringir Sábado', puntos: -2000, stickers: muchos('S01', 3) },
+]);
+comprobar('una tanda de sancion se pagina normal', sancion[0].bloques[0].stickers.length, 3);
+comprobar('el titulo de la sancion muestra los puntos negativos',
+  rotuloBloque(sancion[0].bloques[0]).includes('-2000 pts'), true);
 
 console.log('\n--- Botones visibles del generador');
 const htmlGenerador = await readFile(new URL('../generador.html', import.meta.url), 'utf8');

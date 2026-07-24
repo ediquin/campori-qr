@@ -27,6 +27,25 @@
   margin-top: .5mm;
 }
 
+/* ------------------------------------------------------ bloques por evento */
+
+/* Cada evento es un bloque con su titulo encima de sus QR. Antes iban de corrido;
+   ahora se agrupan para que al recortar cada lote quede claramente rotulado. */
+.bloque-evento {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  margin-bottom: 1.5mm;
+}
+.bloque-titulo {
+  font: 700 8.5pt/1.15 system-ui, sans-serif;
+  width: 198mm;               /* 12 columnas x 16.5 mm, para alinear con la rejilla */
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 1mm 0 .6mm;
+  border-bottom: .2mm solid #999;
+}
+.bloque-sancion .bloque-titulo { color: #b00000; border-color: #b00000; }
+
 /* ---------------------------------------------------------------- stickers */
 
 /* El QR mide 15 x 15 mm y lleva una linea breve debajo para que el

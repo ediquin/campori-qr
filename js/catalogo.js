@@ -21,6 +21,13 @@ export const REGLAS = {
   espiritualesObligatorios: 7,
   // Cada evento adicional puede sumar una sola vez por club.
   adicionalesRepetibles: false,
+  // Una misma sancion puede aplicarse varias veces (varios dias), asi que cada
+  // sticker de sancion resta por separado. Lo que NO se permite es escanear el
+  // mismo sticker dos veces: eso lo bloquea el control de serial ya escaneado.
+  sancionesRepetibles: true,
+  // El total nunca queda negativo: una sancion se come los puntos que el club
+  // tenga y no mas. El detalle igual muestra cuanto se resto.
+  pisoTotalEnCero: true,
 };
 
 export const EVENTOS_FISICOS = [
@@ -81,6 +88,21 @@ export const CRITERIOS_ADICIONALES = [
   { codigo: 'A27', nombre: 'EVENTO DIRECTORES', puntos: 100 },
   { codigo: 'A28', nombre: 'INSPECCIÓN SÁBADO', puntos: 100 },
   { codigo: 'A29', nombre: 'VOLEYBALL GIGANTE', puntos: 100 },
+  // Eventos agregados despues. Van al final para no renumerar los anteriores, y
+  // pueden tener puntajes distintos de 100: el motor lee el valor de cada uno.
+  { codigo: 'A30', nombre: 'BOTIQUÍN', puntos: 500 },
+  { codigo: 'A31', nombre: 'PLAZA DEL AVENTURERO', puntos: 200 },
+  { codigo: 'A32', nombre: 'SEGURIDAD', puntos: 200 },
+  { codigo: 'A33', nombre: 'LIMPIEZA KM4', puntos: 200 },
+];
+
+// Sanciones: restan puntaje. Cada una tiene puntos negativos y su propio QR.
+// Se pegan en la ficha del club igual que cualquier sticker; al escanearlas,
+// descuentan del total (que nunca baja de 0, ver REGLAS.pisoTotalEnCero).
+export const SANCIONES = [
+  { codigo: 'S01', nombre: 'Infringir el Sábado', puntos: -2000 },
+  { codigo: 'S02', nombre: 'No clasificar la basura', puntos: -500 },
+  { codigo: 'S03', nombre: 'No respetar la hora de silencio', puntos: -500 },
 ];
 
 // ------------------------------------------------------------------ derivados
@@ -93,6 +115,7 @@ const porCodigo = new Map();
 for (const e of EVENTOS_FISICOS) porCodigo.set(e.codigo, { ...e, tipo: 'fisico', puntos: PUNTOS_EVENTO });
 for (const e of EVENTOS_ESPIRITUALES) porCodigo.set(e.codigo, { ...e, tipo: 'espiritual', puntos: PUNTOS_EVENTO });
 for (const e of CRITERIOS_ADICIONALES) porCodigo.set(e.codigo, { ...e, tipo: 'adicional' });
+for (const e of SANCIONES) porCodigo.set(e.codigo, { ...e, tipo: 'sancion' });
 
 export const TODOS_LOS_ITEMS = [...porCodigo.values()];
 
@@ -101,5 +124,5 @@ export function buscarEvento(codigo) {
 }
 
 export function etiquetaTipo(tipo) {
-  return { fisico: 'Físico', espiritual: 'Espiritual', adicional: 'Adicional' }[tipo] || tipo;
+  return { fisico: 'Físico', espiritual: 'Espiritual', adicional: 'Adicional', sancion: 'Sanción' }[tipo] || tipo;
 }

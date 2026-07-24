@@ -36,7 +36,7 @@ export function calcular(escaneos, opciones = {}) {
   const alertas = [];
   const serialesVistos = new Map();   // id de sticker -> posicion del escaneo
   const eventosContados = new Map();  // codigo de evento -> posicion del escaneo
-  const contados = { fisico: [], espiritual: [], adicional: [] };
+  const contados = { fisico: [], espiritual: [], adicional: [], sancion: [] };
   let fisicosDescartadosPorTope = 0;
 
   escaneos.forEach((escaneo, i) => {
@@ -77,8 +77,11 @@ export function calcular(escaneos, opciones = {}) {
       return;
     }
 
+    // Las sanciones pueden repetirse (varios dias). Lo que no se permite es el mismo
+    // sticker dos veces, y eso ya lo bloqueo el control de serial de mas arriba.
     const yaContado = eventosContados.get(evento.codigo);
-    const puedeRepetir = evento.tipo === 'adicional' && REGLAS.adicionalesRepetibles;
+    const puedeRepetir = (evento.tipo === 'adicional' && REGLAS.adicionalesRepetibles) ||
+                         (evento.tipo === 'sancion' && REGLAS.sancionesRepetibles);
     if (yaContado && !puedeRepetir) {
       anotar('repetido', {
         evento,
@@ -99,7 +102,12 @@ export function calcular(escaneos, opciones = {}) {
 
     // El sticker trae su puntaje impreso. Si no coincide con el catalogo actual es
     // que se imprimio con otra configuracion: mandamos el del catalogo y avisamos.
-    const puntosCatalogo = evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO;
+    // Fisicos y espirituales valen siempre PUNTOS_EVENTO; adicionales y sanciones
+    // toman su valor del catalogo (los adicionales pueden ser 100/200/500, las
+    // sanciones son negativas).
+    const puntosCatalogo = (evento.tipo === 'adicional' || evento.tipo === 'sancion')
+      ? evento.puntos
+      : PUNTOS_EVENTO;
     if (Number.isInteger(lectura.puntos) && lectura.puntos !== puntosCatalogo) {
       alertas.push({
         nivel: 'aviso',
@@ -116,6 +124,7 @@ export function calcular(escaneos, opciones = {}) {
   const puntosFisico = sumar(contados.fisico);
   const puntosEspiritual = sumar(contados.espiritual);
   const puntosAdicional = sumar(contados.adicional);
+  const puntosSancion = sumar(contados.sancion);   // negativo o cero
 
   const codigosEspiritualesHechos = new Set(contados.espiritual.map(x => x.evento.codigo));
   const espiritualesFaltantes = EVENTOS_ESPIRITUALES.filter(e => !codigosEspiritualesHechos.has(e.codigo));
@@ -134,6 +143,16 @@ export function calcular(escaneos, opciones = {}) {
       nivel: 'aviso',
       texto: `Faltan ${espiritualesFaltantes.length} de ${REGLAS.espiritualesObligatorios} eventos espirituales obligatorios: ` +
              espiritualesFaltantes.map(e => e.nombre).join(', '),
+    });
+  }
+  // Las sanciones se muestran como alerta grave: es lo que el jurado tiene que ver.
+  if (contados.sancion.length) {
+    const detalleSanciones = contados.sancion
+      .map(s => `${s.evento.nombre} (${s.puntos})`).join(', ');
+    alertas.push({
+      nivel: 'alerta',
+      texto: `${contados.sancion.length} sanción${contados.sancion.length === 1 ? '' : 'es'} ` +
+             `por ${puntosSancion} pts: ${detalleSanciones}.`,
     });
   }
   for (const d of detalle) {
@@ -172,12 +191,26 @@ export function calcular(escaneos, opciones = {}) {
       puntos: puntosAdicional,
       eventos: contados.adicional,
     },
-    total: puntosFisico + puntosEspiritual + puntosAdicional,
+    sancion: {
+      puntos: puntosSancion,          // negativo o cero
+      cantidad: contados.sancion.length,
+      eventos: contados.sancion,
+    },
+    // El total suma todo y despues se pone un piso en cero (REGLAS.pisoTotalEnCero):
+    // una sancion se come los puntos que el club tenga, pero no lo deja negativo.
+    // `totalBruto` conserva la resta real por si hace falta auditarla.
+    totalBruto: puntosFisico + puntosEspiritual + puntosAdicional + puntosSancion,
+    total: pisar(puntosFisico + puntosEspiritual + puntosAdicional + puntosSancion),
     totalBase: puntosFisico + puntosEspiritual,
     detalle,
     alertas,
     completo: espiritualesFaltantes.length === 0 && contados.fisico.length === REGLAS.fisicosQueCuentan,
   };
+}
+
+// Aplica el piso del total. Con REGLAS.pisoTotalEnCero el total nunca baja de 0.
+function pisar(total) {
+  return REGLAS.pisoTotalEnCero ? Math.max(0, total) : total;
 }
 
 /** Resumen de una linea para listados y para la planilla. */
@@ -186,9 +219,11 @@ export function resumen(resultado) {
     fisico: resultado.fisico.puntos,
     espiritual: resultado.espiritual.puntos,
     adicional: resultado.adicional.puntos,
+    sancion: resultado.sancion.puntos,
     total: resultado.total,
     eventosFisicos: resultado.fisico.hechos,
     eventosEspirituales: resultado.espiritual.hechos,
+    sanciones: resultado.sancion.cantidad,
     alertas: resultado.alertas.length,
     completo: resultado.completo,
   };

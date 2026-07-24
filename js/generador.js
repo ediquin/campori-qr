@@ -2,15 +2,15 @@
 
 import {
   CAMPORI, PUNTOS_EVENTO,
-  EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES, buscarEvento,
+  EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES, SANCIONES, buscarEvento,
 } from './catalogo.js';
 import { armarSticker } from './codigo.js';
 import { generarMatriz, matrizASvg } from './qr-encoder.js?v=2';
 import { crearIdentificador } from './identificador.js';
 import {
   LADO_QR_MM, obtenerFormatoPapel,
-  planificarPaginas, resumirPagina, crearPdfStickers,
-} from './pdf-stickers.js?v=3';
+  planificarPaginas, rotuloBloque, crearPdfStickers,
+} from './pdf-stickers.js?v=4';
 import { descargar } from './exportar.js';
 
 const $ = sel => document.querySelector(sel);
@@ -46,16 +46,19 @@ function pintarSelectorEventos() {
     { titulo: 'Eventos físicos', lista: EVENTOS_FISICOS, puntos: PUNTOS_EVENTO },
     { titulo: 'Eventos espirituales', lista: EVENTOS_ESPIRITUALES, puntos: PUNTOS_EVENTO },
     { titulo: 'Puntaje adicional', lista: CRITERIOS_ADICIONALES, puntos: null },
+    // Las sanciones vienen destildadas por defecto: casi nunca hacen falta muchas,
+    // y no queremos imprimir tandas de QR que restan puntos sin querer.
+    { titulo: 'Sanciones', lista: SANCIONES, puntos: null, marcado: false, sancion: true },
   ];
 
   $('#eventos').innerHTML = secciones.map(s => `
     <h3>${s.titulo}
       <button type="button" class="marcar-grupo chico" data-grupo="${escapar(s.titulo)}">alternar todos</button>
     </h3>
-    <div class="rejilla" data-grupo="${escapar(s.titulo)}">
+    <div class="rejilla ${s.sancion ? 'rejilla-sancion' : ''}" data-grupo="${escapar(s.titulo)}">
       ${s.lista.map(e => `
-        <label class="opcion-evento">
-          <input type="checkbox" name="evento" value="${e.codigo}" checked>
+        <label class="opcion-evento${s.sancion ? ' es-sancion' : ''}">
+          <input type="checkbox" name="evento" value="${e.codigo}" ${s.marcado === false ? '' : 'checked'}>
           <span class="mono">${e.codigo}</span>
           <span class="nombre">${escapar(e.nombre)}</span>
           <span class="pastilla">${s.puntos ?? e.puntos} pts</span>
@@ -132,7 +135,11 @@ async function generarStickers() {
   const gruposPdf = [];
   for (const codigo of codigos) {
     const evento = buscarEvento(codigo);
-    const puntos = evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO;
+    // Adicionales y sanciones toman su puntaje del catalogo (100/200/500 o negativo);
+    // fisicos y espirituales valen siempre PUNTOS_EVENTO.
+    const puntos = (evento.tipo === 'adicional' || evento.tipo === 'sancion')
+      ? evento.puntos
+      : PUNTOS_EVENTO;
     const grupoPdf = {
       codigo: evento.codigo,
       nombre: evento.nombre,
@@ -206,10 +213,13 @@ function mostrarGeneracion(generacion) {
   const paginas = planificarPaginas(generacion.grupos, formato.id);
   const hojas = paginas.map(pagina => `<section class="hoja">
     <div class="hoja-titulo">
-      <span class="eventos-pagina" title="${escapar(resumirPagina(pagina, 1000))}">${escapar(resumirPagina(pagina))}</span>
+      <span class="eventos-pagina">Hoja de stickers</span>
       <span class="derecha">${escapar(generacion.campori)} · ${formato.nombre} · hoja ${pagina.numeroPagina}/${pagina.paginasTotal} · ${pagina.stickers.length} stickers</span>
     </div>
-    <div class="rejilla-stickers">${pagina.stickers.map(sticker => sticker.html).join('')}</div>
+    ${pagina.bloques.map(bloque => `<div class="bloque-evento${bloque.puntos < 0 ? ' bloque-sancion' : ''}">
+      <div class="bloque-titulo">${escapar(rotuloBloque(bloque))}</div>
+      <div class="rejilla-stickers">${bloque.stickers.map(sticker => sticker.html).join('')}</div>
+    </div>`).join('')}
   </section>`);
 
   const total = generacion.grupos.reduce((n, grupo) => n + grupo.stickers.length, 0);

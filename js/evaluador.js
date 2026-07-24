@@ -14,6 +14,9 @@ const $$ = s => [...document.querySelectorAll(s)];
 const escapar = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const hoy = () => new Date().toISOString().slice(0, 10);
 
+// Muestra el puntaje con su signo: +200, -500, o — cuando no suma nada.
+const signo = n => n > 0 ? `+${n}` : n < 0 ? `${n}` : '—';
+
 const ICONOS = {
   contado: '✅', club: '🏷️', repetido: '🔁', excedente: '🔢',
   serial_repetido: '🔁', serial_ajeno: '🚨',
@@ -184,6 +187,14 @@ function pintarFicha() {
   marcador('#m-espirituales', `${r.espiritual.hechos}/${REGLAS.espiritualesObligatorios}`,
     r.espiritual.faltantes.length === 0 ? 'completo' : r.espiritual.hechos ? 'falta' : '');
   marcador('#m-adicional', r.adicional.puntos, '');
+  // La sancion solo se muestra cuando el club tiene alguna: lo normal es que no.
+  const mSancion = $('#m-sancion');
+  if (r.sancion.cantidad) {
+    mSancion.hidden = false;
+    mSancion.querySelector('.valor').textContent = r.sancion.puntos;
+  } else {
+    mSancion.hidden = true;
+  }
   marcador('#m-total', r.total, r.completo ? 'completo' : '');
 
   $('#alertas-club').innerHTML = r.alertas.length
@@ -203,7 +214,7 @@ function pintarFicha() {
             <div class="nom">${escapar(nombre)}</div>
             <div class="por">${tipo} · <span class="${info.nivel === 'ok' ? 'tenue' : ''}">${info.etiqueta}</span>${d.detalleTexto ? ' · ' + escapar(d.detalleTexto) : ''}</div>
           </span>
-          <span class="pts">${d.puntos ? '+' + d.puntos : '—'}</span>
+          <span class="pts ${d.puntos < 0 ? 'resta' : ''}">${signo(d.puntos)}</span>
           <button class="quitar" data-crudo="${escapar(d.escaneo.crudo)}">quitar</button>
         </div>`;
       }).join('')
@@ -293,9 +304,15 @@ async function procesarCodigo(texto) {
 
   const info = ESTADOS[mio.estado];
   const nombre = mio.evento ? mio.evento.nombre : lectura.crudo;
-  if (mio.estado === 'contado') {
+  if (mio.estado === 'contado' && mio.evento.tipo === 'sancion') {
+    // Una sancion entro bien, pero es mala noticia: se muestra en rojo y con
+    // sonido de aviso, no con el tono de exito de los eventos.
+    pitido('aviso'); vibrar('aviso');
+    avisar('alerta', '⛔', `${mio.puntos} · ${nombre}`,
+      `Sanción · total del club: ${r.total} pts`);
+  } else if (mio.estado === 'contado') {
     pitido('ok'); vibrar('ok');
-    avisar('ok', '✅', `+${mio.puntos} · ${nombre}`,
+    avisar('ok', '✅', `${signo(mio.puntos)} · ${nombre}`,
       `${etiquetaTipo(mio.evento.tipo)} · total del club: ${r.total} pts`);
   } else {
     const grave = info.nivel === 'alerta';
@@ -373,6 +390,7 @@ function pintarResultados() {
       <td class="num">${resultado.fisico.puntos}</td>
       <td class="num">${resultado.espiritual.puntos}</td>
       <td class="num">${resultado.adicional.puntos}</td>
+      <td class="num ${resultado.sancion.puntos < 0 ? 'resta' : 'tenue'}">${resultado.sancion.puntos || '—'}</td>
       <td class="num"><strong>${resultado.total}</strong></td>
       <td>${marca}</td>
     </tr>`;
@@ -402,13 +420,15 @@ function hojasParaExportar({ soloConEscaneos = false, idsClub = null } = {}) {
   const puntajes = [
     ['ID', 'Club', 'Región', 'Iglesia', 'Distrito', 'Director/a',
       'Eventos físicos', 'Puntos físicos', 'Eventos espirituales', 'Puntos espirituales',
-      'Puntos adicionales', 'TOTAL', 'Espirituales faltantes',
+      'Puntos adicionales', 'Sanciones', 'Puntos sanción', 'TOTAL', 'Espirituales faltantes',
       'Alertas graves', 'Avisos', 'Estado'],
     ...todos.map(({ club, escaneos, resultado, ficha }) => [
       club.id, club.nombre, club.region, club.iglesia, club.distrito, club.director,
       resultado.fisico.hechos, resultado.fisico.puntos,
       resultado.espiritual.hechos, resultado.espiritual.puntos,
-      resultado.adicional.puntos, resultado.total,
+      resultado.adicional.puntos,
+      resultado.sancion.cantidad, resultado.sancion.puntos,
+      resultado.total,
       resultado.espiritual.faltantes.map(e => e.nombre).join(', '),
       resultado.alertas.filter(a => a.nivel === 'alerta').length,
       resultado.alertas.filter(a => a.nivel !== 'alerta').length,
@@ -450,7 +470,7 @@ function hojasParaExportar({ soloConEscaneos = false, idsClub = null } = {}) {
   // claveColumna le dice al script de Google por que columna fusionar. Las hojas
   // sin clave (los parametros) se reescriben enteras en cada envio.
   return [
-    { nombre: 'Puntajes', filas: puntajes, claveColumna: 0, clubesReemplazar: ids ? [...ids] : undefined, anchos: [7, 26, 11, 20, 18, 26, 13, 13, 15, 15, 14, 10, 40, 13, 8, 12] },
+    { nombre: 'Puntajes', filas: puntajes, claveColumna: 0, clubesReemplazar: ids ? [...ids] : undefined, anchos: [7, 26, 11, 20, 18, 26, 13, 13, 15, 15, 14, 10, 13, 10, 40, 13, 8, 12] },
     { nombre: 'Detalle de escaneos', filas: detalle, claveColumna: 0, clubesReemplazar: ids ? [...ids] : undefined, anchos: [7, 24, 11, 7, 8, 34, 11, 22, 8, 40, 16, 19, 24, 16] },
     { nombre: 'Alertas', filas: alertas, claveColumna: 0, clubesReemplazar: ids ? [...ids] : undefined, anchos: [7, 24, 11, 8, 90] },
     { nombre: 'Parámetros', filas: parametros, reemplazar: true, anchos: [30, 50] },

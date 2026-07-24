@@ -202,9 +202,60 @@ grupo('Puntaje adicional');
 }
 
 {
-  comprobar('hay 29 eventos adicionales', CRITERIOS_ADICIONALES.length, 29);
-  comprobar('todos los adicionales valen 100 puntos',
-    CRITERIOS_ADICIONALES.every(evento => evento.puntos === 100), true);
+  comprobar('hay 33 eventos adicionales', CRITERIOS_ADICIONALES.length, 33);
+  comprobar('los adicionales A01-A29 valen 100 puntos',
+    CRITERIOS_ADICIONALES.slice(0, 29).every(evento => evento.puntos === 100), true);
+  comprobar('los adicionales agregados valen segun el catalogo',
+    CRITERIOS_ADICIONALES.slice(29).map(e => [e.codigo, e.puntos]),
+    [['A30', 500], ['A31', 200], ['A32', 200], ['A33', 200]]);
+
+  // Un evento adicional de 500 lee su puntaje del catalogo, no el fijo de 200.
+  const r = calcular([sticker('A30')]);
+  comprobar('Botiquin (A30) suma 500', r.adicional.puntos, 500);
+  comprobar('Plaza (A31) suma 200', calcular([sticker('A31')]).adicional.puntos, 200);
+}
+
+grupo('Sanciones');
+
+{
+  // Una sancion resta del total.
+  const r = calcular([
+    ...['F01', 'F02', 'F03', 'F04', 'F05'].map(c => sticker(c)),   // 1000
+    sticker('S02'),                                                 // -500
+  ]);
+  comprobar('la sancion resta del total', r.total, 500);
+  comprobar('el bucket de sancion es negativo', r.sancion.puntos, -500);
+  comprobar('cuenta la sancion aplicada', r.sancion.cantidad, 1);
+  comprobar('la sancion aparece como alerta grave',
+    r.alertas.some(a => a.nivel === 'alerta' && a.texto.includes('No clasificar')), true);
+}
+
+{
+  // Piso en cero: la sancion no deja el total negativo.
+  const r = calcular([sticker('F01'), sticker('S01')]);   // 200 - 2000
+  comprobar('el total nunca baja de cero', r.total, 0);
+  comprobar('pero el total bruto conserva la resta real', r.totalBruto, -1800);
+}
+
+{
+  // Repetible: dos stickers DISTINTOS de la misma sancion restan las dos veces.
+  const r = calcular([
+    ...['F01', 'F02', 'F03', 'F04', 'F05', 'F06', 'F07', 'F08'].map(c => sticker(c)), // 1600
+    ...['E01', 'E02', 'E03', 'E04', 'E05', 'E06', 'E07'].map(c => sticker(c)),         // 1400 -> 3000
+    sticker('S02', -500, 100),
+    sticker('S02', -500, 200),
+  ]);
+  comprobar('dos sanciones del mismo tipo restan dos veces', r.sancion.puntos, -1000);
+  comprobar('cuenta las dos sanciones', r.sancion.cantidad, 2);
+  comprobar('el total refleja las dos', r.total, 2000);
+}
+
+{
+  // Pero el MISMO sticker de sancion escaneado dos veces resta una sola vez.
+  const s = sticker('S02', -500, 77);
+  const r = calcular([sticker('F01'), s, { ...s }]);
+  comprobar('el mismo sticker de sancion no resta dos veces', r.sancion.puntos, -500);
+  comprobar('el segundo escaneo del mismo sticker queda marcado', r.detalle[2].estado, 'serial_repetido');
 }
 
 grupo('Casos borde');

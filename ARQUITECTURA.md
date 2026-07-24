@@ -24,10 +24,20 @@ Reglas del puntaje:
 | Físicos | 14 disponibles | 200 | Cuentan los **8 primeros escaneados** | 1600 |
 | Espirituales | 7 | 200 | Los 7 son obligatorios | 1400 |
 | **Base** | | | | **3000** |
-| Adicional | 29 eventos | 100 | Cada evento cuenta una vez, fuera del tope base | — |
+| Adicional | 33 eventos | 100 / 200 / 500 | Cada evento cuenta una vez, fuera del tope base | — |
+| Sanciones | 3 | −2000 / −500 | Restan del total; se pueden repetir (varios días) | — |
 
-No hay rúbrica ni puestos: cada evento físico o espiritual vale 200 y cada
-evento adicional vale 100. Ningún evento puede repetirse.
+Los eventos físicos y espirituales valen 200. Los adicionales valen lo que dice el
+catálogo: los 29 originales valen 100, y los cuatro agregados después valen 500
+(Botiquín) y 200 (Plaza del Aventurero, Seguridad, Limpieza Km4). Ningún evento se
+repite, salvo las sanciones.
+
+**Sanciones** (`S01`–`S03`): restan puntaje. Una misma sanción puede aplicarse varias
+veces (distintos stickers, p. ej. la misma falta en dos días), pero el **mismo sticker
+no resta dos veces** — lo bloquea el control de serial ya escaneado. El **total nunca
+baja de 0** (`REGLAS.pisoTotalEnCero`): una sanción se come los puntos que el club
+tenga y no más. El resultado conserva `totalBruto` con la resta real, por si hace falta
+auditarla.
 
 ---
 
@@ -229,7 +239,7 @@ Cada escaneo termina en exactamente uno de estos estados:
 
 | Estado | Nivel | Suma |
 |---|---|---|
-| `contado` | ok | sí |
+| `contado` | ok | sí — o **resta**, si es una sanción (puntos negativos) |
 | `club` | info | no — es el QR de cabecera de la ficha |
 | `repetido` | alerta | no |
 | `excedente` | aviso | no — pasó el cupo de 8 |
@@ -237,6 +247,11 @@ Cada escaneo termina en exactamente uno de estos estados:
 | `serial_ajeno` | alerta | no — ya lo usó otro club |
 | `desconocido` | alerta | no — código fuera del catálogo |
 | `invalido` | alerta | no — firma mala o formato ilegible |
+
+Las **sanciones** entran como `contado` (se registraron bien) pero con puntos
+negativos, así que el motor no necesita un estado aparte. La UI las muestra distinto:
+banda roja, sonido de aviso y no el tono de éxito. Cada sanción aplicada agrega además
+una alerta grave para el jurado.
 
 **El orden de las comprobaciones importa** y está fijado a propósito:
 
@@ -353,7 +368,7 @@ misma.
 | `pruebas-qr.mjs` | Formato e información de versión contra las **tablas publicadas de ISO/IEC 18004**. Cada código se decodifica leyendo la matriz como un escáner, y se verifican los **síndromes de Reed-Solomon**: si dan cero, la corrección es matemáticamente correcta. |
 | `pruebas-decoder.mjs` | Imágenes sintéticas con degradaciones deliberadas y geometría del recorte central que excluye QR vecinos. La perspectiva se aplica con una homografía resuelta por **eliminación gaussiana**, método distinto del que usa el lector: si compartieran implementación, un error se cancelaría. |
 | `pruebas-exportar.mjs` | El `.xlsx` se reabre y se comprueban los **CRC del ZIP** y los datos (acentos, comillas, signos de XML, números, celdas vacías). |
-| `pruebas-pdf.mjs` | El PDF declara oficio 215 × 330 mm (204 QR) o carta 216 × 281,5 mm (168 QR), llena eventos consecutivos, repite nombres, usa vectores y mantiene válidos `xref` y `/Length`. |
+| `pruebas-pdf.mjs` | El PDF declara oficio 215 × 330 mm o carta 216 × 281,5 mm, **agrupa cada evento en su propio bloque con título** (192 QR/hoja en oficio, 168 en carta, dejando lugar a la banda de título), parte un evento largo repitiendo su título con el rango, usa vectores y mantiene válidos `xref` y `/Length`. |
 | `pruebas-sheets.mjs` | La regla de fusión, incluido el caso que rompía (mandar clubes no evaluados), y que un serial presente en dos clubes deje a ambos en conflicto. |
 | `pruebas-escenario.mjs` | Una ficha realista del club `ediquin` con sus cinco trampas. Imprime un informe legible. |
 
