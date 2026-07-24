@@ -108,6 +108,47 @@ export async function traerSeriales(url, clave) {
 }
 
 /**
+ * Trae el estado completo de la hoja "Detalle de escaneos".
+ * Google Sheets pasa a ser la fuente central: si una fila se corrige o se borra
+ * manualmente, la siguiente sincronizacion reemplaza la copia del telefono.
+ */
+export async function traerEstado(url, clave) {
+  if (!url) return { ok: false, error: 'Falta la dirección del script' };
+  try {
+    const direccion = new URL(url.trim());
+    direccion.searchParams.set('accion', 'estado');
+    direccion.searchParams.set('clave', clave || '');
+    const respuesta = await fetch(direccion.toString(), { method: 'GET', redirect: 'follow' });
+    const texto = await respuesta.text();
+    try {
+      return JSON.parse(texto);
+    } catch {
+      return { ok: false, error: 'El script devolvió una página de Google en vez de datos.' };
+    }
+  } catch (e) {
+    return { ok: false, error: `No se pudo sincronizar: ${e.message}` };
+  }
+}
+
+/** Limpia y deduplica los escaneos recibidos desde Google Sheets. */
+export function normalizarEscaneos(escaneos = []) {
+  const unicos = new Map();
+  for (const fila of Array.isArray(escaneos) ? escaneos : []) {
+    const idClub = String(fila?.idClub || '').trim();
+    const crudo = String(fila?.crudo || '').trim().toUpperCase();
+    if (!idClub || !crudo) continue;
+    const ts = Number(fila?.ts);
+    unicos.set(`${idClub}\u0000${crudo}`, {
+      idClub,
+      crudo,
+      ts: Number.isFinite(ts) && ts >= 0 ? ts : 0,
+      dispositivo: String(fila?.dispositivo || '').trim(),
+    });
+  }
+  return [...unicos.values()].sort((a, b) => a.ts - b.ts);
+}
+
+/**
  * Convierte la respuesta de Apps Script a un Map estable.
  * Acepta tambien el formato antiguo, que devolvia un solo club como texto.
  */

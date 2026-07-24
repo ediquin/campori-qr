@@ -373,7 +373,7 @@ export function matrizASvg(matriz, { lado = 25, margen = 4, color = '#000', fond
 
   // Un solo path con todos los modulos, agrupando los oscuros consecutivos de cada
   // fila en un rectangulo. Un <rect> por modulo, o un tramo por modulo, multiplica
-  // por tres el peso del archivo, y una hoja lleva 56 stickers.
+  // por tres el peso del archivo, y una hoja lleva hasta 204 stickers.
   let d = '';
   for (let y = 0; y < tamano; y++) {
     let x = 0;

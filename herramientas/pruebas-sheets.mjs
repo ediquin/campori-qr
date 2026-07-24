@@ -11,7 +11,9 @@
 // archivo corre dentro de Google y usa sus APIs. Lo que se prueba es la REGLA;
 // si cambia una, hay que cambiar la otra.
 
-import { normalizarSeriales, conflictosRemotosParaClub } from '../js/sheets.js';
+import {
+  normalizarSeriales, normalizarEscaneos, conflictosRemotosParaClub,
+} from '../js/sheets.js';
 
 let pasadas = 0;
 const fallos = [];
@@ -31,7 +33,8 @@ function fusionar(hojaPrevia, entrada) {
   }
 
   const col = entrada.claveColumna;
-  const entrantes = new Set(nuevas.map(f => String(f[col])));
+  const entrantes = new Set((entrada.clubesReemplazar || []).map(String));
+  nuevas.forEach(f => entrantes.add(String(f[col])));
   const previas = hojaPrevia.length > 1 ? hojaPrevia.slice(1) : [];
   const conservadas = previas.filter(f => String(f[col]) !== '' && !entrantes.has(String(f[col])));
 
@@ -161,6 +164,38 @@ grupo('Un mismo sticker en dos clubes deja a ambos en conflicto');
   const antiguo = normalizarSeriales({ [qr]: 'C012' });
   comprobar('acepta respuestas antiguas con un solo club',
     antiguo.get(qr), ['C012']);
+}
+
+grupo('Sincronizacion bidireccional');
+
+{
+  const previa = [
+    ['ID', 'Código QR'],
+    ['C001', 'F01-AAAAAAAA'],
+    ['C002', 'F02-BBBBBBBB'],
+  ];
+  const corregida = fusionar(previa, {
+    nombre: 'Detalle de escaneos',
+    claveColumna: 0,
+    clubesReemplazar: ['C001'],
+    filas: [['ID', 'Código QR']],
+  });
+  comprobar('borrar la ultima fila de un club tambien se sincroniza',
+    corregida, [['ID', 'Código QR'], ['C002', 'F02-BBBBBBBB']]);
+}
+
+{
+  const escaneos = normalizarEscaneos([
+    { idClub: ' C001 ', crudo: 'f01-aaaaaaaa', ts: 20, dispositivo: ' Ana ' },
+    { idClub: 'C001', crudo: 'F01-AAAAAAAA', ts: 20, dispositivo: 'Ana' },
+    { idClub: 'C002', crudo: 'F02-BBBBBBBB', ts: 10 },
+    { idClub: '', crudo: 'F03-CCCCCCCC', ts: 30 },
+  ]);
+  comprobar('normaliza y deduplica el estado remoto', escaneos.length, 2);
+  comprobar('ordena los escaneos remotos por fecha',
+    escaneos.map(e => e.idClub), ['C002', 'C001']);
+  comprobar('normaliza el texto QR recibido',
+    escaneos[1].crudo, 'F01-AAAAAAAA');
 }
 
 console.log('');

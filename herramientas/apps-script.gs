@@ -73,8 +73,13 @@ function doPost(peticion) {
           finales = nuevas;
         } else {
           const col = entrada.claveColumna;
-          // Que clubes trae este envio. Solo esos se tocan.
+          // Que clubes trae este envio. `clubesReemplazar` permite borrar tambien
+          // la ultima fila de un club: en ese caso no quedan filas nuevas desde las
+          // que se pudiera deducir su ID.
           const entrantes = {};
+          (entrada.clubesReemplazar || []).forEach(function (id) {
+            if (String(id)) entrantes[String(id)] = true;
+          });
           nuevas.forEach(function (f) { entrantes[String(f[col])] = true; });
 
           const previas = hoja.getLastRow() > 1
@@ -156,7 +161,7 @@ function registrarEnvio(libro, datos, resumen) {
 function doGet(peticion) {
   const parametros = (peticion && peticion.parameter) || {};
 
-  if (parametros.accion !== 'seriales') {
+  if (parametros.accion !== 'seriales' && parametros.accion !== 'estado') {
     return responder({ ok: true, mensaje: 'El script está publicado y responde.' });
   }
   if (parametros.clave !== CLAVE) {
@@ -165,13 +170,19 @@ function doGet(peticion) {
 
   const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Detalle de escaneos');
   if (!hoja || hoja.getLastRow() < 2) {
-    return responder({ ok: true, seriales: {}, clubes: 0 });
+    return responder({
+      ok: true, seriales: {}, clubes: 0, escaneos: [],
+      revision: new Date().toISOString(),
+    });
   }
 
   const valores = hoja.getRange(1, 1, hoja.getLastRow(), hoja.getLastColumn()).getValues();
   const encabezado = valores[0].map(function (v) { return String(v).trim(); });
   const colId = encabezado.indexOf('ID');
   const colQr = encabezado.indexOf('Código QR');
+  const colDispositivo = encabezado.indexOf('Evaluador');
+  const colTs = encabezado.indexOf('Marca de tiempo');
+  const colOrden = encabezado.indexOf('Orden');
   if (colId < 0 || colQr < 0) {
     return responder({ ok: false, error: 'La hoja "Detalle de escaneos" no tiene las columnas ID y Código QR' });
   }
@@ -181,6 +192,7 @@ function doGet(peticion) {
   // hasta que los responsables aclaren el incidente.
   const seriales = {};
   const clubes = {};
+  const escaneos = [];
   for (let i = 1; i < valores.length; i++) {
     const id = String(valores[i][colId]).trim();
     const qr = String(valores[i][colQr]).trim();
@@ -188,9 +200,24 @@ function doGet(peticion) {
     if (!seriales[qr]) seriales[qr] = [];
     if (seriales[qr].indexOf(id) < 0) seriales[qr].push(id);
     clubes[id] = true;
+    let ts = colTs >= 0 ? Number(valores[i][colTs]) : 0;
+    if (!isFinite(ts) || ts < 0) ts = colOrden >= 0 ? Number(valores[i][colOrden]) : i;
+    escaneos.push({
+      idClub: id,
+      crudo: qr,
+      ts: ts,
+      dispositivo: colDispositivo >= 0 ? String(valores[i][colDispositivo] || '') : '',
+    });
   }
 
-  return responder({ ok: true, seriales: seriales, clubes: Object.keys(clubes).length });
+  const base = {
+    ok: true,
+    seriales: seriales,
+    clubes: Object.keys(clubes).length,
+    revision: new Date().toISOString(),
+  };
+  if (parametros.accion === 'estado') base.escaneos = escaneos;
+  return responder(base);
 }
 
 function responder(objeto) {

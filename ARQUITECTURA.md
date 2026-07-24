@@ -24,10 +24,10 @@ Reglas del puntaje:
 | Físicos | 14 disponibles | 200 | Cuentan los **8 primeros escaneados** | 1600 |
 | Espirituales | 7 | 200 | Los 7 son obligatorios | 1400 |
 | **Base** | | | | **3000** |
-| Adicional | criterios sueltos | 100 / 50 | Fuera del tope base | — |
+| Adicional | 29 eventos | 100 | Cada evento cuenta una vez, fuera del tope base | — |
 
-No hay rúbrica ni puestos: participar vale 200, siempre. Ningún evento puede
-repetirse.
+No hay rúbrica ni puestos: cada evento físico o espiritual vale 200 y cada
+evento adicional vale 100. Ningún evento puede repetirse.
 
 ---
 
@@ -81,7 +81,7 @@ Detalles de formato, todos con motivo:
 - Se fuerza un símbolo **versión 2** (25×25 módulos) con corrección **nivel H**.
   La versión 2 conserva un patrón de alineación que ayuda al lector cuando el
   teléfono está inclinado.
-- A **26 mm impreso**, queda margen para que el sticker
+- A **15 mm impreso**, queda margen para que el sticker
   quede arrugado o manchado.
 
 ### 3.2 Por qué no hay backend
@@ -260,22 +260,21 @@ Lo detectó una prueba.
 
 ## 7. La ruta compartida de datos
 
-**No existe sincronización automática entre teléfonos.** Nunca, ni con internet. No
-se envía información sin una acción del evaluador; los escaneos se guardan primero
-en el teléfono y Google Sheets actúa como la base compartida cuando hay conexión.
+Google Sheets es la fuente central cuando hay conexión. Cada cambio local se marca
+como pendiente, se envía automáticamente y luego se vuelve a leer el estado completo.
+Además, cada teléfono consulta la planilla cada 20 segundos.
 
 ```
-   celu 1 ──envía lo suyo──┐                    ┌──▶ celu 1 trae los seriales
-                           ├──▶ Google Sheets ──┤
-   celu 2 ──envía lo suyo──┘                    └──▶ celu 2 trae los seriales
+   celu 1 ──cambio pendiente──┐                    ┌──▶ celu 1 actualiza su copia
+                              ├──▶ Google Sheets ──┤
+   celu 2 ──cambio pendiente──┘                    └──▶ celu 2 actualiza su copia
 
-   Ajustes → Enviar mis puntajes / Traer lo de los demás
+   Sincronización automática cada 20 segundos
 ```
 
 Sin señal, cada teléfono continúa evaluando con IndexedDB. Al recuperar conexión,
-envía lo pendiente y trae los seriales compartidos. El detalle de escaneos es
-obligatorio: sin el QR completo no se puede detectar un sticker repetido entre
-clubes.
+envía lo pendiente y trae el detalle completo. Una corrección manual en la hoja
+`Detalle de escaneos` reemplaza la copia local si ese club no tiene cambios pendientes.
 
 ### Cómo conviven varios teléfonos en la misma planilla
 
@@ -342,7 +341,7 @@ Herramientas (Node, sin dependencias)
 
 ## 9. Estrategia de pruebas
 
-`node herramientas/pruebas.mjs` — **368 comprobaciones**, sin framework.
+`node herramientas/pruebas.mjs` — **375 comprobaciones**, sin framework.
 
 El criterio: cada suite tiene que probar contra algo **independiente**, no contra sí
 misma.
@@ -396,17 +395,13 @@ Si el objetivo es dar feedback, mirar acá primero:
 
 1. **Los QR operativos se pueden copiar o fabricar.** Es una decisión explícita para
    simplificar la preparación; el sistema se concentra en sumar y detectar duplicados.
-2. **Los criterios de puntaje adicional son de ejemplo.** `CRITERIOS_ADICIONALES` en
-   [`js/catalogo.js`](js/catalogo.js) tiene valores inventados que hay que reemplazar.
-3. **Cambiar un código de evento invalida los stickers ya impresos.** Agregar al
+2. **Cambiar un código de evento invalida los stickers ya impresos.** Agregar al
    final es seguro; renumerar no.
-4. **La URL del Apps Script es efectivamente una contraseña.** Quien la tenga puede
+3. **La URL del Apps Script es efectivamente una contraseña.** Quien la tenga puede
    escribir en la planilla. Por eso se guarda en el teléfono y nunca en el repo.
-5. **La ruta de Sheets depende de que alguien se acuerde de "Traer lo de los demás".** Se
-   hace solo al abrir la app, pero si un evaluador la deja abierta todo el día, sus
-   datos remotos envejecen. Un fallo silencioso: no se rompe nada, simplemente deja
-   de detectar.
-6. **El desfase de relojes no tiene defensa**, solo un aviso en Ajustes.
+4. **La sincronización no es instantánea.** Google Apps Script no puede enviar cambios
+   al navegador: los teléfonos consultan cada 20 segundos.
+5. **El desfase de relojes no tiene defensa**, solo un aviso en Ajustes.
 
 ---
 

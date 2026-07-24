@@ -13,8 +13,11 @@ const $$ = sel => [...document.querySelectorAll(sel)];
 const escapar = s => String(s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const STICKERS_POR_HOJA = 7 * 8;
-const LADO_QR_STICKER = 26;
+// Hoja oficio 215 x 330 mm, con 5 mm de margen: 12 columnas x 17 filas.
+const COLUMNAS_POR_HOJA = 12;
+const FILAS_POR_HOJA = 17;
+const STICKERS_POR_HOJA = COLUMNAS_POR_HOJA * FILAS_POR_HOJA;
+const LADO_QR_STICKER = 15;
 const CLAVE_SERIALES = `campori-qr-unicos-${CAMPORI.prefijo}`;
 
 // Este registro es interno y automático. No se descarga ni se carga: solamente
@@ -73,9 +76,10 @@ function actualizarConteo() {
   const cantidad = Number($('#cantidad').value) || 0;
   const eventos = eventosElegidos();
   const total = eventos.length * cantidad;
-  const hojas = Math.ceil(total / STICKERS_POR_HOJA);
+  // Cada evento empieza en una hoja nueva para que los tacos no se mezclen.
+  const hojas = eventos.length * Math.ceil(cantidad / STICKERS_POR_HOJA);
   $('#conteo-stickers').textContent =
-    `${eventos.length} eventos × ${cantidad} = ${total} stickers · ${hojas} hoja${hojas === 1 ? '' : 's'} A4`;
+    `${eventos.length} eventos × ${cantidad} = ${total} stickers · ${hojas} hoja${hojas === 1 ? '' : 's'} oficio`;
 
   const pesado = total > 900;
   $('#aviso-volumen').style.display = pesado ? '' : 'none';

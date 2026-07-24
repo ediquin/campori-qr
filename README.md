@@ -28,7 +28,7 @@ JavaScript que el navegador abre tal cual. Funciona sin señal.
 | Físicos | 14 disponibles | 200 | Cuentan los 8 primeros escaneados | 1600 |
 | Espirituales | 7 | 200 | Los 7 son obligatorios | 1400 |
 | **Base** | | | | **3000** |
-| Adicional | criterios sueltos | 100 / 50 | Aparte del puntaje base | — |
+| Adicional | 29 eventos | 100 | Cada evento cuenta una vez, aparte del puntaje base | — |
 
 Cada sticker lleva un identificador aleatorio único, así que el sistema detecta
 eventos repetidos, stickers fotocopiados y stickers prestados entre clubes.
@@ -37,7 +37,7 @@ eventos repetidos, stickers fotocopiados y stickers prestados entre clubes.
 
 ```bash
 node herramientas/servidor.mjs      # http://localhost:8080
-node herramientas/pruebas.mjs       # 368 comprobaciones
+node herramientas/pruebas.mjs       # 375 comprobaciones
 node herramientas/generar-clubes.mjs  # regenera el padrón desde el Excel
 ```
 

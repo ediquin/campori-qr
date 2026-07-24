@@ -19,9 +19,8 @@ export const REGLAS = {
   fisicosQueCuentan: 8,
   // Los 7 espirituales son obligatorios: si falta alguno, se avisa.
   espiritualesObligatorios: 7,
-  // Un mismo criterio adicional puede sumar mas de una vez (ej. limpieza revisada
-  // cada dia). Poné false si querés que cada criterio sume una sola vez por club.
-  adicionalesRepetibles: true,
+  // Cada evento adicional puede sumar una sola vez por club.
+  adicionalesRepetibles: false,
 };
 
 export const EVENTOS_FISICOS = [
@@ -51,15 +50,37 @@ export const EVENTOS_ESPIRITUALES = [
   { codigo: 'E07', nombre: 'La Ley del Aventureros' },
 ];
 
-// PROVISORIO: estos criterios son de ejemplo para que el sistema quede armado.
-// Reemplazalos por los reales antes de imprimir. Los puntos solo pueden ser 100 o 50.
+// Eventos adicionales oficiales. Todos valen 100 puntos y cuentan una sola vez.
 export const CRITERIOS_ADICIONALES = [
-  { codigo: 'A01', nombre: 'Limpieza de baños', puntos: 100 },
-  { codigo: 'A02', nombre: 'Seguridad del campamento', puntos: 100 },
-  { codigo: 'A03', nombre: 'Orden y limpieza del sitio', puntos: 100 },
-  { codigo: 'A04', nombre: 'Puntualidad', puntos: 50 },
-  { codigo: 'A05', nombre: 'Uniforme completo', puntos: 50 },
-  { codigo: 'A06', nombre: 'Decoración de la carpa', puntos: 50 },
+  { codigo: 'A01', nombre: 'RFA VIERNES', puntos: 100 },
+  { codigo: 'A02', nombre: 'CULTO GENERAL VIERNES MAÑANA', puntos: 100 },
+  { codigo: 'A03', nombre: 'RECEPCIÓN DE SÁBADO', puntos: 100 },
+  { codigo: 'A04', nombre: 'CULTO GENERAL VIERNES NOCHE', puntos: 100 },
+  { codigo: 'A05', nombre: 'SUPER PAPÁ SUPER MAMÁ', puntos: 100 },
+  { codigo: 'A06', nombre: 'SUPER PAPÁ SUPER MAMÁ SEGUNDA FASE', puntos: 100 },
+  { codigo: 'A07', nombre: 'AVENTURALLY', puntos: 100 },
+  { codigo: 'A08', nombre: 'CULTO DIVINO', puntos: 100 },
+  { codigo: 'A09', nombre: 'ESCUELA SABÁTICA', puntos: 100 },
+  { codigo: 'A10', nombre: 'UNIFORMES CAMPING', puntos: 100 },
+  { codigo: 'A11', nombre: 'SÁBADO EN LA TARDE', puntos: 100 },
+  { codigo: 'A12', nombre: 'SUPER PAPÁ SUPER MAMÁ FASE FINAL', puntos: 100 },
+  { codigo: 'A13', nombre: 'BUENO CON LA BIBLIA', puntos: 100 },
+  { codigo: 'A14', nombre: 'STAND 1', puntos: 100 },
+  { codigo: 'A15', nombre: 'STAND 2', puntos: 100 },
+  { codigo: 'A16', nombre: 'STAND 3', puntos: 100 },
+  { codigo: 'A17', nombre: 'STAND 4', puntos: 100 },
+  { codigo: 'A18', nombre: 'STAND 5', puntos: 100 },
+  { codigo: 'A19', nombre: 'BUENO CON LA BIBLIA SEGUNDA FASE', puntos: 100 },
+  { codigo: 'A20', nombre: 'RFA SÁBADO', puntos: 100 },
+  { codigo: 'A21', nombre: 'BUENO CON LA BIBLIA FASE FINAL', puntos: 100 },
+  { codigo: 'A22', nombre: 'STAND 6', puntos: 100 },
+  { codigo: 'A23', nombre: 'CAMPAMENTO LIMPIO', puntos: 100 },
+  { codigo: 'A24', nombre: 'ESPECIALIDAD 1', puntos: 100 },
+  { codigo: 'A25', nombre: 'ESPECIALIDAD 2', puntos: 100 },
+  { codigo: 'A26', nombre: 'ESPECIALIDAD 3', puntos: 100 },
+  { codigo: 'A27', nombre: 'EVENTO DIRECTORES', puntos: 100 },
+  { codigo: 'A28', nombre: 'INSPECCIÓN SÁBADO', puntos: 100 },
+  { codigo: 'A29', nombre: 'VOLEYBALL GIGANTE', puntos: 100 },
 ];
 
 // ------------------------------------------------------------------ derivados

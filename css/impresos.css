@@ -1,10 +1,9 @@
 /* Lo que sale por la impresora: hojas de stickers QR.
    Todas las medidas van en milimetros porque el resultado es fisico: un sticker
-   de 26 mm tiene que medir 26 mm en el papel. */
+   de 15 mm tiene que medir 15 mm en el papel. */
 
-/* Compacta a proposito: 8 filas de stickers entran en una A4 con margenes
-   de 8 mm quedan 281 utiles. Si esta cabecera crece, cada hoja empuja una pagina
-   en blanco detras. */
+/* Compacta a proposito: deja espacio para 17 filas en una hoja oficio de
+   215 x 330 mm con margenes de 5 mm. */
 .hoja-titulo {
   font: 600 8.5pt/1.2 system-ui, sans-serif;
   padding: 1mm 2mm 1.5mm;
@@ -18,18 +17,18 @@
 
 /* ---------------------------------------------------------------- stickers */
 
-/* El sticker mide 26 x 32 mm: 26 de codigo QR mas una linea de texto para que el
+/* El QR mide 15 x 15 mm y lleva una linea breve debajo para que el
    juez de la estacion sepa de que taco es. */
 .rejilla-stickers {
   display: grid;
-  grid-template-columns: repeat(7, 27mm);
-  grid-auto-rows: 33mm;
+  grid-template-columns: repeat(12, 16.5mm);
+  grid-auto-rows: 18mm;
   justify-content: center;
 }
 
 .sticker {
-  width: 26mm;
-  height: 32mm;
+  width: 15mm;
+  height: 17.5mm;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -40,13 +39,13 @@
   break-inside: avoid;
 }
 
-.sticker svg { width: 26mm; height: 26mm; display: block; }
+.sticker svg { width: 15mm; height: 15mm; display: block; }
 
 .sticker .pie {
-  font: 700 5.5pt/1 ui-monospace, Consolas, monospace;
-  letter-spacing: .2px;
+  font: 700 4pt/1 ui-monospace, Consolas, monospace;
+  letter-spacing: 0;
   text-align: center;
-  padding-top: .6mm;
+  padding-top: .35mm;
   white-space: nowrap;
 }
 .sticker .pie .serial { font-weight: 400; color: #555; }

@@ -32,6 +32,11 @@ const estado = {
   // este telefono por si solo nunca lo sabria.
   remotos: new Map(),   // id de sticker -> ids de clubes, traidos de Sheets
   remotosFecha: null,
+  conectado: false,
+  sincronizando: false,
+  pendientes: new Set(),
+  temporizadorSync: null,
+  intervaloSync: null,
   escaner: null,
   linternaEncendida: false,
 };
@@ -207,6 +212,7 @@ function pintarFicha() {
   $$('#lista-escaneos .quitar').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('¿Quitar este escaneo de la ficha?')) return;
     await almacen.borrarEscaneo(estado.club.id, b.dataset.crudo);
+    await marcarPendiente(estado.club.id);
     await recargarEscaneos();
   }));
 
@@ -277,6 +283,7 @@ async function procesarCodigo(texto) {
   }
 
   await recargarEscaneos();
+  await marcarPendiente(estado.club.id);
 
   // Buscamos como quedo ESTE escaneo dentro del resultado recalculado, para poder
   // avisar exactamente por que se conto o por que no.
@@ -382,8 +389,11 @@ function pintarResultados() {
  * La columna 0 de cada hoja lleva el ID del club a proposito: es la que usa el
  * script de Google para saber que filas reemplazar y cuales dejar quietas.
  */
-function hojasParaExportar({ soloConEscaneos = false } = {}) {
-  const todos = resultadosDeTodos().filter(t => !soloConEscaneos || t.escaneos.length);
+function hojasParaExportar({ soloConEscaneos = false, idsClub = null } = {}) {
+  const ids = idsClub ? new Set(idsClub) : null;
+  const todos = resultadosDeTodos().filter(t =>
+    (!ids || ids.has(t.club.id)) && (!soloConEscaneos || t.escaneos.length)
+  );
   const fecha = new Date().toLocaleString('es-BO');
 
   // "Graves" son las que exigen revision humana: trampas y QR invalidos.
@@ -406,7 +416,7 @@ function hojasParaExportar({ soloConEscaneos = false } = {}) {
     ]),
   ];
 
-  const detalle = [['ID', 'Club', 'Región', 'Orden', 'Código', 'Evento', 'Tipo', 'Estado', 'Puntos', 'Motivo', 'Evaluador', 'Fecha y hora', 'Código QR']];
+  const detalle = [['ID', 'Club', 'Región', 'Orden', 'Código', 'Evento', 'Tipo', 'Estado', 'Puntos', 'Motivo', 'Evaluador', 'Fecha y hora', 'Código QR', 'Marca de tiempo']];
   const alertas = [['ID', 'Club', 'Región', 'Nivel', 'Alerta']];
   for (const { club, resultado } of todos) {
     for (const d of resultado.detalle) {
@@ -416,7 +426,7 @@ function hojasParaExportar({ soloConEscaneos = false } = {}) {
         d.evento ? etiquetaTipo(d.evento.tipo) : '',
         ESTADOS[d.estado].etiqueta, d.puntos, d.detalleTexto || '',
         d.escaneo.dispositivo || '',
-        new Date(d.escaneo.ts).toLocaleString('es-BO'), d.escaneo.crudo,
+        new Date(d.escaneo.ts).toLocaleString('es-BO'), d.escaneo.crudo, d.escaneo.ts,
       ]);
     }
     for (const a of resultado.alertas) {
@@ -440,9 +450,9 @@ function hojasParaExportar({ soloConEscaneos = false } = {}) {
   // claveColumna le dice al script de Google por que columna fusionar. Las hojas
   // sin clave (los parametros) se reescriben enteras en cada envio.
   return [
-    { nombre: 'Puntajes', filas: puntajes, claveColumna: 0, anchos: [7, 26, 11, 20, 18, 26, 13, 13, 15, 15, 14, 10, 40, 13, 8, 12] },
-    { nombre: 'Detalle de escaneos', filas: detalle, claveColumna: 0, anchos: [7, 24, 11, 7, 8, 34, 11, 22, 8, 40, 16, 19, 24] },
-    { nombre: 'Alertas', filas: alertas, claveColumna: 0, anchos: [7, 24, 11, 8, 90] },
+    { nombre: 'Puntajes', filas: puntajes, claveColumna: 0, clubesReemplazar: ids ? [...ids] : undefined, anchos: [7, 26, 11, 20, 18, 26, 13, 13, 15, 15, 14, 10, 40, 13, 8, 12] },
+    { nombre: 'Detalle de escaneos', filas: detalle, claveColumna: 0, clubesReemplazar: ids ? [...ids] : undefined, anchos: [7, 24, 11, 7, 8, 34, 11, 22, 8, 40, 16, 19, 24, 16] },
+    { nombre: 'Alertas', filas: alertas, claveColumna: 0, clubesReemplazar: ids ? [...ids] : undefined, anchos: [7, 24, 11, 8, 90] },
     { nombre: 'Parámetros', filas: parametros, reemplazar: true, anchos: [30, 50] },
   ];
 }
@@ -454,81 +464,82 @@ function mostrarEstadoSheets(nivel, texto) {
 }
 
 async function guardarSheets() {
-  await almacen.guardarAjuste('sheetsUrl', $('#sheets-url').value.trim());
-  await almacen.guardarAjuste('sheetsClave', $('#sheets-clave').value);
+  const url = $('#sheets-url').value.trim();
+  const clave = $('#sheets-clave').value;
+  await almacen.guardarAjuste('sheetsUrl', url);
+  await almacen.guardarAjuste('sheetsClave', clave);
+  $('#conexion-url').value = url;
+  $('#conexion-clave').value = clave;
   mostrarEstadoSheets('ok', 'Guardado en este teléfono. No se sube al repositorio.');
 }
 
-async function enviarASheets() {
-  await guardarSheets();
+async function guardarPendientes() {
+  await almacen.guardarAjuste('clubesPendientes', [...estado.pendientes]);
+}
+
+async function marcarPendiente(idClub) {
+  if (!idClub) return;
+  estado.pendientes.add(idClub);
+  await guardarPendientes();
+  programarSincronizacion();
+}
+
+function programarSincronizacion() {
+  clearTimeout(estado.temporizadorSync);
+  estado.temporizadorSync = setTimeout(() => sincronizarAutomaticamente(), 900);
+}
+
+async function enviarClubes(idsClub, silencioso = false) {
+  const ids = [...new Set(idsClub || [])].filter(Boolean);
+  if (!ids.length) return { ok: true, hojas: [] };
   const url = $('#sheets-url').value.trim();
   const clave = $('#sheets-clave').value;
+  if (!url || !clave) return { ok: false, error: 'Falta conectar la aplicación con Google Sheets.' };
 
-  const boton = $('#sheets-enviar');
-  boton.disabled = true;
-  boton.textContent = 'Enviando…';
-  mostrarEstadoSheets('', 'Subiendo los puntajes…');
-
-  // Mandamos solo los clubes que este telefono evaluo. Si mandaramos los 72, los
-  // que no tocamos irian con cero y borrarian en la planilla lo que cargo otro.
-  const todas = hojasParaExportar({ soloConEscaneos: true });
-  // El detalle es obligatorio: contiene el QR/serial que permite descubrir el
-  // mismo sticker en clubes evaluados desde telefonos diferentes.
-  const hojas = todas;
-
-  const mios = resultadosDeTodos().filter(t => t.escaneos.length);
-  if (!mios.length) {
-    boton.disabled = false;
-    boton.textContent = 'Enviar puntajes ahora';
-    mostrarEstadoSheets('aviso', 'Todavía no evaluaste ningún club en este teléfono, así que no hay nada que enviar.');
-    return;
-  }
+  if (!silencioso) mostrarEstadoSheets('', `Enviando ${ids.length} club${ids.length === 1 ? '' : 'es'}…`);
+  const hojas = hojasParaExportar({ idsClub: ids });
+  const nombres = resultadosDeTodos()
+    .filter(t => ids.includes(t.club.id))
+    .map(t => t.club.nombre);
 
   const r = await sheets.enviar(
     {
       url, clave,
       dispositivo: estado.dispositivo || 'sin nombre',
-      clubes: mios.map(t => t.club.nombre).join(', '),
+      clubes: nombres.join(', '),
     },
-    hojas.map(h => ({ nombre: h.nombre, filas: h.filas, claveColumna: h.claveColumna, reemplazar: h.reemplazar })),
+    hojas.map(h => ({
+      nombre: h.nombre,
+      filas: h.filas,
+      claveColumna: h.claveColumna,
+      reemplazar: h.reemplazar,
+      clubesReemplazar: h.clubesReemplazar,
+    })),
     CAMPORI.nombre
   );
 
-  boton.disabled = false;
-  boton.textContent = 'Enviar puntajes ahora';
   if (r.ok) {
-    mostrarEstadoSheets('ok', `Listo. Se actualizaron: ${(r.hojas || []).join(' · ')}. ` +
-      'Abrí tu planilla para verlo.');
-  } else {
-    mostrarEstadoSheets('alerta', r.error || 'No se pudo enviar.');
+    ids.forEach(id => estado.pendientes.delete(id));
+    await guardarPendientes();
+    if (!silencioso) mostrarEstadoSheets('ok', 'Cambios enviados. Actualizando desde la planilla…');
   }
+  return r;
 }
 
-/**
- * Baja de la planilla lo que ya cargaron los demas telefonos.
- * @param {boolean} silencioso  true cuando corre solo al abrir la app
- */
-async function traerDeSheets(silencioso = false) {
-  const url = $('#sheets-url').value.trim() || await almacen.leerAjuste('sheetsUrl', '');
-  const clave = $('#sheets-clave').value || await almacen.leerAjuste('sheetsClave', '');
-  if (!url) {
-    if (!silencioso) mostrarEstadoSheets('aviso', 'Primero pegá la dirección del script.');
-    return;
+async function aplicarEstadoRemoto(r) {
+  if (!Array.isArray(r.escaneos)) {
+    return {
+      ok: false,
+      error: 'El Apps Script instalado es anterior. Volvé a copiar herramientas/apps-script.gs y publicá una versión nueva.',
+    };
   }
 
-  const boton = $('#sheets-traer');
-  if (!silencioso) { boton.disabled = true; mostrarEstadoSheets('', 'Consultando la planilla…'); }
+  const escaneos = sheets.normalizarEscaneos(r.escaneos);
+  await almacen.reemplazarEscaneos(escaneos, estado.pendientes);
+  estado.todos = await almacen.todosLosEscaneos();
+  if (estado.club) estado.escaneos = await almacen.escaneosDeClub(estado.club.id);
 
-  const r = await sheets.traerSeriales(url, clave);
-  if (!silencioso) boton.disabled = false;
-
-  if (!r.ok) {
-    if (!silencioso) mostrarEstadoSheets('alerta', r.error || 'No se pudo consultar.');
-    return;
-  }
-
-  // Las claves vienen como el texto del QR; lo pasamos al id de sticker (evento-serial),
-  // que es con lo que trabaja el motor de puntaje.
+  // Las claves vienen como texto QR; el motor trabaja con el id evento-serial.
   estado.remotos = new Map();
   for (const [crudo, clubes] of sheets.normalizarSeriales(r.seriales || {})) {
     const id = idDeSticker(crudo);
@@ -541,10 +552,69 @@ async function traerDeSheets(silencioso = false) {
   pintarEstadoRemotos();
   pintarClubes();
   if (estado.club) pintarFicha();
-  if (!silencioso) {
-    mostrarEstadoSheets('ok', `Listo: ${estado.remotos.size} stickers ya usados, de ${r.clubes} clubes. ` +
-      'Ahora este teléfono puede detectar un sticker que otro club ya usó.');
+  if (estado.vista === 'resultados') pintarResultados();
+  return { ok: true };
+}
+
+async function traerDeSheets(silencioso = false) {
+  const url = $('#sheets-url').value.trim() || await almacen.leerAjuste('sheetsUrl', '');
+  const clave = $('#sheets-clave').value || await almacen.leerAjuste('sheetsClave', '');
+  if (!url || !clave) {
+    const falta = { ok: false, error: 'Falta la dirección o la clave de Google Sheets.' };
+    if (!silencioso) mostrarEstadoSheets('aviso', falta.error);
+    return falta;
   }
+
+  const boton = $('#sheets-traer');
+  if (!silencioso) { boton.disabled = true; mostrarEstadoSheets('', 'Consultando la planilla…'); }
+
+  const r = await sheets.traerEstado(url, clave);
+  if (!silencioso) boton.disabled = false;
+
+  if (!r.ok) {
+    if (!silencioso) mostrarEstadoSheets('alerta', r.error || 'No se pudo consultar.');
+    return r;
+  }
+
+  const aplicada = await aplicarEstadoRemoto(r);
+  if (!aplicada.ok) {
+    if (!silencioso) mostrarEstadoSheets('alerta', aplicada.error);
+    return aplicada;
+  }
+  if (!silencioso) {
+    mostrarEstadoSheets('ok', `Sincronizado: ${estado.todos.length} escaneos de ${r.clubes || 0} clubes. ` +
+      'Los cambios manuales de "Detalle de escaneos" ya están reflejados.');
+  }
+  return r;
+}
+
+async function sincronizarAutomaticamente({ forzarEnvio = false } = {}) {
+  if (estado.sincronizando || !navigator.onLine) return;
+  const url = $('#sheets-url').value.trim();
+  const clave = $('#sheets-clave').value;
+  if (!url || !clave) return;
+
+  estado.sincronizando = true;
+  try {
+    const ids = [...estado.pendientes];
+    if (ids.length) {
+      const enviada = await enviarClubes(ids, !forzarEnvio);
+      if (!enviada.ok && forzarEnvio) mostrarEstadoSheets('alerta', enviada.error || 'No se pudo enviar.');
+    }
+    await traerDeSheets(!forzarEnvio);
+  } finally {
+    estado.sincronizando = false;
+  }
+}
+
+async function enviarASheets() {
+  await guardarSheets();
+  const boton = $('#sheets-enviar');
+  boton.disabled = true;
+  boton.textContent = 'Sincronizando…';
+  await sincronizarAutomaticamente({ forzarEnvio: true });
+  boton.disabled = false;
+  boton.textContent = 'Sincronizar ahora';
 }
 
 function pintarEstadoRemotos() {
@@ -559,7 +629,7 @@ function pintarEstadoRemotos() {
   const cuando = new Date(estado.remotosFecha).toLocaleString('es-BO');
   caja.className = 'aviso-caja ok';
   caja.innerHTML = `<strong>${estado.remotos.size} stickers</strong> ya usados por otros clubes, ` +
-    `traídos el ${escapar(cuando)}. Volvé a traerlos cada tanto para tenerlos al día.`;
+    `sincronizados el ${escapar(cuando)}. La aplicación revisa la planilla automáticamente.`;
 }
 
 async function probarSheets() {
@@ -570,6 +640,75 @@ async function probarSheets() {
   boton.disabled = false;
   if (r.ok) mostrarEstadoSheets('ok', r.mensaje || 'El script responde correctamente.');
   else mostrarEstadoSheets('alerta', r.error || 'No respondió.');
+}
+
+function mostrarEstadoConexion(nivel, texto) {
+  $('#conexion-estado').innerHTML =
+    `<div class="aviso-caja ${nivel}">${escapar(texto)}</div>`;
+}
+
+function iniciarIntervaloSincronizacion() {
+  clearInterval(estado.intervaloSync);
+  estado.intervaloSync = setInterval(() => sincronizarAutomaticamente(), 20000);
+}
+
+async function conectarInicial() {
+  const boton = $('#conexion-conectar');
+  const url = $('#conexion-url').value.trim();
+  const clave = $('#conexion-clave').value;
+  const dispositivo = $('#conexion-dispositivo').value.trim();
+  if (!url || !clave) {
+    mostrarEstadoConexion('alerta', 'Pegá la dirección del Apps Script y escribí la clave.');
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = 'Conectando…';
+  mostrarEstadoConexion('', 'Leyendo el estado de Google Sheets…');
+
+  $('#sheets-url').value = url;
+  $('#sheets-clave').value = clave;
+  $('#nombre-dispositivo').value = dispositivo;
+  estado.dispositivo = dispositivo;
+  await almacen.guardarAjuste('sheetsUrl', url);
+  await almacen.guardarAjuste('sheetsClave', clave);
+  await almacen.guardarAjuste('dispositivo', dispositivo);
+
+  // En la primera actualización de esta versión conservamos los datos locales y
+  // los enviamos una vez. Después, Google Sheets queda como fuente central.
+  const preparada = await almacen.leerAjuste('sincronizacionBidireccional', false);
+  if (!preparada) {
+    estado.todos.forEach(e => estado.pendientes.add(e.idClub));
+    await guardarPendientes();
+  }
+
+  const remota = await traerDeSheets(true);
+  if (!remota?.ok) {
+    boton.disabled = false;
+    boton.textContent = 'Conectar y sincronizar';
+    mostrarEstadoConexion('alerta', remota?.error || 'No se pudo leer la planilla.');
+    return;
+  }
+
+  if (estado.pendientes.size) {
+    mostrarEstadoConexion('', 'Enviando los cambios que estaban guardados en este teléfono…');
+    const enviada = await enviarClubes([...estado.pendientes], true);
+    if (!enviada.ok) {
+      boton.disabled = false;
+      boton.textContent = 'Conectar y sincronizar';
+      mostrarEstadoConexion('alerta', enviada.error || 'No se pudieron enviar los datos locales.');
+      return;
+    }
+    await traerDeSheets(true);
+  }
+
+  await almacen.guardarAjuste('sincronizacionBidireccional', true);
+  estado.conectado = true;
+  iniciarIntervaloSincronizacion();
+  $('#conexion-inicial').classList.add('oculto');
+  mostrarEstadoSheets('ok', 'Conectado. La planilla se revisa automáticamente cada 20 segundos.');
+  boton.disabled = false;
+  boton.textContent = 'Conectar y sincronizar';
 }
 
 // ------------------------------------------------------------------ ajustes
@@ -587,6 +726,8 @@ async function pintarDiagnostico() {
       estado.remotos.size
         ? `${estado.remotos.size}, traídos el ${new Date(estado.remotosFecha).toLocaleString('es-BO')}`
         : 'Sin traer. No se detectan stickers prestados entre clubes de otros evaluadores.'],
+    [estado.conectado ? '✅' : '⚠️', 'Google Sheets',
+      estado.conectado ? 'Conectado · actualización automática cada 20 segundos' : 'Sin conexión automática'],
     ['🔢', 'Escaneos guardados', String(estado.todos.length)],
     ['🏁', 'Fichas terminadas', String(todos.filter(t => t.ficha?.cerrada).length)],
     ['🔑', 'Prefijo de los QR', CAMPORI.prefijo],
@@ -609,6 +750,12 @@ async function iniciar() {
   $('#sheets-url').value =
     await almacen.leerAjuste('sheetsUrl', '') || sheets.URL_PREDETERMINADA;
   $('#sheets-clave').value = await almacen.leerAjuste('sheetsClave', '') || '';
+  $('#conexion-url').value = $('#sheets-url').value;
+  $('#conexion-clave').value = $('#sheets-clave').value;
+  $('#conexion-dispositivo').value = estado.dispositivo;
+
+  const pendientes = await almacen.leerAjuste('clubesPendientes', []);
+  if (Array.isArray(pendientes)) estado.pendientes = new Set(pendientes);
 
   const remotos = await almacen.leerAjuste('remotos', null);
   if (Array.isArray(remotos)) estado.remotos = new Map(remotos);
@@ -629,10 +776,6 @@ async function iniciar() {
     $('#estado-cabecera').textContent =
       'Ponele nombre a este teléfono en Ajustes, sobre todo si evalúan entre varios.';
   }
-
-  // Si hay planilla configurada y señal, traemos lo de los demas sin molestar.
-  // Que falle no importa: se reintenta a mano desde Ajustes.
-  if ($('#sheets-url').value && navigator.onLine) traerDeSheets(true);
 
   if (!window.isSecureContext) {
     $('#estado-cabecera').textContent =
@@ -671,6 +814,7 @@ $('#manual').addEventListener('click', () => {
 $('#cerrar-ficha').addEventListener('click', async () => {
   const ficha = estado.fichas.get(estado.club.id);
   await almacen.marcarFicha(estado.club.id, { cerrada: !ficha?.cerrada });
+  await marcarPendiente(estado.club.id);
   estado.fichas = await almacen.fichas();
   pintarFicha();
   const ahoraCerrada = estado.fichas.get(estado.club.id)?.cerrada;
@@ -681,6 +825,7 @@ $('#cerrar-ficha').addEventListener('click', async () => {
 $('#borrar-ficha').addEventListener('click', async () => {
   if (!confirm(`¿Borrar TODOS los escaneos de ${estado.club.nombre}? No se puede deshacer.`)) return;
   await almacen.borrarClub(estado.club.id);
+  await marcarPendiente(estado.club.id);
   estado.fichas = await almacen.fichas();
   await recargarEscaneos();
   avisar('info', '🗑️', 'Ficha vaciada', 'Podés empezar de nuevo.');
@@ -697,6 +842,7 @@ $('#exportar-csv').addEventListener('click', () => {
 // --- este telefono
 $('#guardar-dispositivo').addEventListener('click', async () => {
   estado.dispositivo = $('#nombre-dispositivo').value.trim();
+  $('#conexion-dispositivo').value = estado.dispositivo;
   await almacen.guardarAjuste('dispositivo', estado.dispositivo);
   $('#estado-cabecera').textContent = estado.dispositivo
     ? `Evaluando como: ${estado.dispositivo}`
@@ -711,18 +857,34 @@ $('#sheets-guardar').addEventListener('click', guardarSheets);
 $('#sheets-probar').addEventListener('click', probarSheets);
 $('#sheets-enviar').addEventListener('click', enviarASheets);
 $('#sheets-traer').addEventListener('click', () => traerDeSheets(false));
+$('#conexion-conectar').addEventListener('click', conectarInicial);
+$('#conexion-omitir').addEventListener('click', () => {
+  estado.conectado = false;
+  $('#conexion-inicial').classList.add('oculto');
+  mostrarEstadoSheets('aviso', 'Trabajando sin conexión. Podés conectarte desde Ajustes.');
+});
 
 $('#borrar-todo').addEventListener('click', async () => {
   if (!confirm('¿Borrar TODOS los datos de TODOS los clubes de este teléfono?')) return;
   if (!confirm('Esto no se puede deshacer. ¿Seguro?')) return;
+  const idsConDatos = [...new Set(estado.todos.map(e => e.idClub))];
   await almacen.borrarTodo();
   estado.todos = []; estado.fichas = new Map(); estado.escaneos = [];
+  for (const id of idsConDatos) estado.pendientes.add(id);
+  await guardarPendientes();
+  programarSincronizacion();
   pintarClubes(); pintarDiagnostico();
   alert('Listo, no quedan datos.');
 });
 
 // La camara se apaga sola si la app pasa a segundo plano.
-document.addEventListener('visibilitychange', () => { if (document.hidden) apagarCamara(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) apagarCamara();
+  else if (estado.conectado) sincronizarAutomaticamente();
+});
+window.addEventListener('online', () => {
+  if (estado.conectado) sincronizarAutomaticamente();
+});
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => { /* sin service worker anda igual, solo que no offline */ });

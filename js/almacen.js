@@ -98,6 +98,36 @@ export async function borrarClub(idClub) {
   return new Promise((r, rechazar) => { t.oncomplete = r; t.onerror = () => rechazar(t.error); });
 }
 
+/**
+ * Reemplaza la copia local con el estado de Google Sheets.
+ * Los clubes en `preservarClubes` tienen cambios locales pendientes y no se tocan
+ * hasta que terminen de enviarse.
+ */
+export async function reemplazarEscaneos(escaneosRemotos, preservarClubes = new Set()) {
+  await abrir();
+  const preservados = new Set(preservarClubes || []);
+  const actuales = await todosLosEscaneos();
+  const conservar = actuales.filter(e => preservados.has(e.idClub));
+  const remotos = (escaneosRemotos || []).filter(e => !preservados.has(e.idClub));
+
+  const t = transaccion(['escaneos'], 'readwrite');
+  const almacen = t.objectStore('escaneos');
+  almacen.clear();
+  for (const e of [...conservar, ...remotos]) {
+    almacen.put({
+      idClub: e.idClub,
+      crudo: e.crudo,
+      ts: Number(e.ts) || 0,
+      dispositivo: e.dispositivo || '',
+    });
+  }
+  return new Promise((r, rechazar) => {
+    t.oncomplete = r;
+    t.onerror = () => rechazar(t.error);
+    t.onabort = () => rechazar(t.error);
+  });
+}
+
 // ------------------------------------------------------------------ fichas
 
 export async function marcarFicha(idClub, datos) {

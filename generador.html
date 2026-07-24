@@ -33,6 +33,12 @@
     display: none; padding: 10px 14px; border-radius: 9px;
     background: #6ea8ff1a; border: 1px solid #6ea8ff44; font-size: .85rem;
   }
+
+  /* Vista previa y exportación en papel oficio: 215 x 330 mm. */
+  .hoja { width: 205mm; min-height: 320mm; }
+  @media print {
+    @page { size: 215mm 330mm; margin: 5mm; }
+  }
 </style>
 </head>
 <body>
@@ -48,7 +54,7 @@
     <section class="panel">
       <h2>QR de eventos</h2>
       <p class="chico tenue" style="margin-top:-6px">
-        Cada hoja A4 trae 56 stickers de 26 mm de un mismo evento, listos para recortar y
+        Cada hoja oficio trae hasta 204 QR de 15 mm de un mismo evento, listos para recortar y
         entregarle al juez de esa estación. Cada vez que generás, todos reciben un
         identificador aleatorio nuevo y único. No usa inventarios ni fichas.
       </p>
@@ -80,13 +86,13 @@
   <div id="barra-impresion" class="no-imprimir">
     <strong id="estado-salida"></strong>
     <span style="flex:1 1 auto"></span>
-    <button class="principal" id="imprimir">Imprimir</button>
+    <button class="principal" id="imprimir">Imprimir / guardar PDF</button>
     <button id="limpiar">Borrar vista previa</button>
   </div>
 
   <div id="salida"></div>
 </main>
 
-<script type="module" src="js/generador.js?v=4"></script>
+<script type="module" src="js/generador.js?v=5"></script>
 </body>
 </html>

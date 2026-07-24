@@ -188,16 +188,23 @@ grupo('Eventos espirituales obligatorios');
 grupo('Puntaje adicional');
 
 {
-  const r = calcular([sticker('A01', 100), sticker('A04', 50)]);
-  comprobar('suma los adicionales', r.adicional.puntos, 150);
+  const r = calcular([sticker('A01', 100), sticker('A04', 100)]);
+  comprobar('suma los adicionales', r.adicional.puntos, 200);
   comprobar('queda fuera del puntaje base', r.totalBase, 0);
-  comprobar('entra en el total', r.total, 150);
+  comprobar('entra en el total', r.total, 200);
 }
 
 {
-  // Los adicionales son repetibles (limpieza revisada varios dias).
+  // Cada evento adicional cuenta una sola vez por club.
   const r = calcular([sticker('A01', 100), sticker('A01', 100)]);
-  comprobar('el mismo criterio adicional puede sumar dos veces', r.adicional.puntos, 200);
+  comprobar('el mismo evento adicional suma una sola vez', r.adicional.puntos, 100);
+  comprobar('el adicional repetido queda marcado', r.detalle[1].estado, 'repetido');
+}
+
+{
+  comprobar('hay 29 eventos adicionales', CRITERIOS_ADICIONALES.length, 29);
+  comprobar('todos los adicionales valen 100 puntos',
+    CRITERIOS_ADICIONALES.every(evento => evento.puntos === 100), true);
 }
 
 grupo('Casos borde');

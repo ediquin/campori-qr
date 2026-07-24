@@ -15,9 +15,10 @@ aplicaciones. Son archivos HTML, CSS y JavaScript que el navegador abre tal cual
 | Físicos | 14 disponibles | 200 | Solo cuentan los **8 primeros escaneados** | **1600** |
 | Espirituales | 7 | 200 | Los 7 son **obligatorios** | **1400** |
 | **Puntaje base** | | | | **3000** |
-| Adicional | criterios sueltos | 100 / 50 | Suma **aparte** del puntaje base | — |
+| Adicional | 29 eventos | 100 | Cada evento cuenta una vez y suma **aparte** del puntaje base | — |
 
-No hay rúbrica ni puestos: el club que hace un evento suma 200, siempre.
+No hay rúbrica ni puestos: cada evento físico o espiritual suma 200 y cada
+evento adicional suma 100.
 
 Lo que el sistema detecta solo:
 
@@ -43,20 +44,20 @@ clave: 'aventuri-2026-de-vuelta-a-casa',   // ← poné una frase propia
 Esa clave firma los códigos QR. **Cambiala antes de imprimir** y no la publiques.
 Si la cambiás después de imprimir, los stickers ya impresos dejan de validar.
 
-Más abajo, `CRITERIOS_ADICIONALES` son de ejemplo. Reemplazalos por los reales
-(seguridad, limpieza de baños, lo que corresponda). Solo pueden valer 100 o 50.
+Más abajo, `CRITERIOS_ADICIONALES` contiene los 29 eventos adicionales oficiales.
+Todos valen 100 puntos y cada uno puede sumar una sola vez por club.
 
 ### 2. Imprimir
 
 Abrí `generador.html`:
 
 Elegí los eventos y cuántos QR necesitás por evento (80 alcanza: son 71 clubes).
-Cada hoja A4 trae 56 stickers de 26 mm de un mismo evento, listos para recortar y
-darle al juez de esa estación. La página no genera fichas ni pide inventarios.
+Cada hoja oficio (21,5 × 33 cm) trae hasta 204 QR de 15 mm de un mismo evento,
+listos para recortar y darle al juez de esa estación. La página no genera fichas ni pide inventarios.
 Cada nueva generación crea identificadores aleatorios distintos.
 
-Papel: cualquier hoja autoadhesiva A4. Imprimí **al 100%, sin "ajustar a página"**,
-o los 26 mm dejan de ser 26 mm.
+Papel: hoja autoadhesiva oficio de 21,5 × 33 cm. Imprimí o guardá como PDF
+**al 100%, sin "ajustar a página"**, o los 15 mm dejan de ser 15 mm.
 
 ### 3. Durante el campamento
 
@@ -75,11 +76,12 @@ Abrí `evaluador.html` en el celular:
 
 ### Evaluando entre varios
 
-Google Sheets es la única vía compartida. Cada teléfono guarda primero sus escaneos
-en forma local, así que puede seguir evaluando sin señal. Cuando recupera conexión:
+Google Sheets es la vía compartida y la fuente central. Al abrir el evaluador aparece
+la pantalla **Conectar con Google Sheets**. Después de conectarse:
 
-1. **Enviar mis puntajes** publica los clubes evaluados y todo el detalle de QR.
-2. **Traer lo de los demás** actualiza la lista de stickers usados por otros clubes.
+1. Cada escaneo o eliminación se envía automáticamente.
+2. La aplicación revisa la planilla cada 20 segundos y al volver a primer plano.
+3. Sin señal, los cambios quedan pendientes en el teléfono y se envían al reconectar.
 
 El detalle siempre se envía: es indispensable para detectar el mismo serial en dos
 clubes. Si eso ocurre, **ninguno recibe los puntos** hasta que se aclare el incidente
@@ -107,8 +109,8 @@ Preparación, una sola vez:
 3. Cambiá la línea de `CLAVE` por una frase tuya.
 4. `Implementar → Nueva implementación → Aplicación web`, con **Ejecutar como: Yo** y
    **Quién tiene acceso: Cualquier usuario**.
-5. Copiá la dirección que termina en `/exec` y pegala en la app, en
-   `Ajustes → Enviar a Google Sheets`, junto con la misma clave.
+5. Copiá la dirección que termina en `/exec` y pegala en la pantalla inicial de la
+   aplicación, junto con la misma clave.
 
 Cada teléfono manda **solo los clubes que evaluó**, junto con el detalle completo de
 sus escaneos. En la planilla se fusionan por club: se reemplazan esas filas y se deja
@@ -119,20 +121,20 @@ qué y cuándo.
 La dirección y la clave se guardan **en el teléfono**, nunca en el repositorio. Quien
 tenga esa dirección puede escribir en tu planilla, así que no la publiques.
 
-#### Traer lo de los demás — no te lo saltees
+#### Correcciones manuales en Google Sheets
 
-El botón **Traer lo de los demás** baja la lista de stickers y todos los clubes donde
-aparece cada uno. Es lo que permite detectar un sticker despegado de una ficha y
-pegado en otra cuando esos dos clubes los evaluaron personas distintas.
+La hoja **Detalle de escaneos** es la fuente del puntaje. Si borrás allí la fila de
+un evento, o corregís su club o su código QR, el cambio aparece en los teléfonos en
+un máximo aproximado de 20 segundos. La aplicación recalcula el puntaje mostrado
+desde ese detalle.
 
-Sin eso, tu teléfono solo conoce las fichas que vos escaneaste, y esa trampa pasa sin
-que nadie se entere. Se hace solo al abrir la app, pero **si dejás la app abierta
-todo el día, tus datos envejecen**: tocá el botón cada tanto.
+No edites solamente el número de la columna TOTAL en la hoja **Puntajes**, porque es
+un resultado calculado y el próximo envío lo vuelve a generar desde el detalle.
 
 Cuando un QR aparece en dos clubes, ambos quedan con ese sticker en conflicto y
 reciben 0 puntos. La decisión sobre el dueño legítimo se toma fuera de la app.
 
-En `Ajustes` te dice cuántos stickers tenés y de cuándo son.
+El botón **Sincronizar ahora** permite forzar la actualización sin esperar 20 segundos.
 
 ---
 
@@ -238,7 +240,7 @@ todos los resultados se rehacen solos, sin tocar los datos.
 se puede detectar un evento repetido, pero no una fotocopia ni un sticker prestado
 entre clubes.
 
-**Por qué 26 mm.** El código se imprime como QR versión 2 (25×25 módulos), con
+**Por qué 15 mm.** El código se imprime como QR versión 2 (25×25 módulos), con
 corrección de error nivel H y el módulo oscuro obligatorio validado. Es la máxima
 redundancia disponible y conserva el patrón de alineación para leerlo inclinado.
 
@@ -246,7 +248,7 @@ redundancia disponible y conserva el patrón de alineación para leerlo inclinad
 
 ## Las pruebas
 
-368 comprobaciones, sin framework:
+375 comprobaciones, sin framework:
 
 - **Núcleo** — la firma coincide con `crypto` de Node; se rechazan QR alterados en
   cualquier campo; el motor de puntaje cumple las reglas y detecta cada trampa.
