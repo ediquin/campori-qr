@@ -12,6 +12,7 @@
 
 import { generarMatriz } from '../js/qr-encoder.js';
 import { corregirBloque, decodificarGris } from '../js/qr-decoder.js';
+import { calcularRecorteCentral } from '../js/escaner.js';
 import { polinomioGenerador, mul } from '../js/galois.js';
 import { armarSticker, armarQrClub } from '../js/codigo.js';
 
@@ -22,6 +23,27 @@ function comprobar(nombre, obtenido, esperado) {
   fallos.push(`${nombre}\n      obtenido: ${JSON.stringify(obtenido)}\n      esperado: ${JSON.stringify(esperado)}`);
 }
 const grupo = t => console.log(`\n--- ${t}`);
+
+// ============================================================ Mira central
+
+grupo('La cámara ignora los QR que quedan alrededor de la mira');
+
+{
+  const redondear = r => Object.fromEntries(
+    Object.entries(r).map(([k, v]) => [k, Math.round(v * 10) / 10])
+  );
+  comprobar(
+    'video 16:9 mostrado en 4:3: recorta el centro que realmente se ve',
+    redondear(calcularRecorteCentral(1280, 720, 640, 480)),
+    { x: 400, y: 180, ancho: 480, alto: 360 }
+  );
+  comprobar(
+    'video y pantalla 4:3: la mira ocupa la mitad central',
+    redondear(calcularRecorteCentral(640, 480, 640, 480)),
+    { x: 160, y: 120, ancho: 320, alto: 240 }
+  );
+  comprobar('dimensiones inválidas no producen un recorte', calcularRecorteCentral(0, 0), null);
+}
 
 // Generador de numeros pseudoaleatorios con semilla, para que las pruebas den
 // siempre el mismo resultado y un fallo se pueda reproducir.

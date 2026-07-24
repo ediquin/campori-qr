@@ -354,7 +354,7 @@ Herramientas (Node, sin dependencias)
 
 ## 9. Estrategia de pruebas
 
-`node herramientas/pruebas.mjs` — **362 comprobaciones**, sin framework.
+`node herramientas/pruebas.mjs` — **365 comprobaciones**, sin framework.
 
 El criterio: cada suite tiene que probar contra algo **independiente**, no contra sí
 misma.
@@ -363,7 +363,7 @@ misma.
 |---|---|
 | `pruebas-nucleo.mjs` | La firma se compara contra `crypto` de Node. Las reglas, contra escenarios escritos a mano. |
 | `pruebas-qr.mjs` | Formato e información de versión contra las **tablas publicadas de ISO/IEC 18004**. Cada código se decodifica leyendo la matriz como un escáner, y se verifican los **síndromes de Reed-Solomon**: si dan cero, la corrección es matemáticamente correcta. |
-| `pruebas-decoder.mjs` | Imágenes sintéticas con degradaciones deliberadas. La perspectiva se aplica con una homografía resuelta por **eliminación gaussiana**, método distinto del que usa el lector: si compartieran implementación, un error se cancelaría. |
+| `pruebas-decoder.mjs` | Imágenes sintéticas con degradaciones deliberadas y geometría del recorte central que excluye QR vecinos. La perspectiva se aplica con una homografía resuelta por **eliminación gaussiana**, método distinto del que usa el lector: si compartieran implementación, un error se cancelaría. |
 | `pruebas-exportar.mjs` | El `.xlsx` se reabre y se comprueban los **CRC del ZIP** y los datos (acentos, comillas, signos de XML, números, celdas vacías). |
 | `pruebas-sheets.mjs` | La regla de fusión, incluido el caso que rompía (mandar clubes no evaluados), y que un serial presente en dos clubes deje a ambos en conflicto. |
 | `pruebas-escenario.mjs` | Una ficha realista del club `ediquin` con sus cinco trampas. Imprime un informe legible. |

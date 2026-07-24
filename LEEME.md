@@ -262,7 +262,7 @@ que el sticker quede algo arrugado o manchado.
 
 ## Las pruebas
 
-362 comprobaciones, sin framework:
+365 comprobaciones, sin framework:
 
 - **Núcleo** — la firma coincide con `crypto` de Node; se rechazan QR alterados en
   cualquier campo; el motor de puntaje cumple las reglas y detecta cada trampa.
@@ -275,7 +275,9 @@ que el sticker quede algo arrugado o manchado.
 - **Lector de QR** — el que usan los iPhone. Se generan imágenes sintéticas y se les
   aplican a propósito las degradaciones que aparecen en la mano de una persona:
   desenfoque, rotación, perspectiva, ruido, contraste bajo, iluminación despareja,
-  reflejo del papel autoadhesivo, rayones y basura alrededor del código. Además se
+  reflejo del papel autoadhesivo, rayones y basura alrededor del código. También se
+  comprueba que la cámara recorte exactamente la mira central para ignorar los QR
+  vecinos de una ficha. Además se
   corrompen bloques a propósito para comprobar que la corrección de errores recupera
   hasta 11 bytes rotos y que **nunca inventa datos** cuando el daño la supera.
 - **Exportación** — el `.xlsx` se vuelve a abrir y se comprueba que los CRC del zip

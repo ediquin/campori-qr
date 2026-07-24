@@ -19,6 +19,34 @@ import { decodificar } from './qr-decoder.js';
 // costo por cuadro. A 480 de ancho un sticker que ocupe un tercio de la pantalla
 // deja unos 5 pixeles por modulo, de sobra para leerlo.
 const ANCHO_ANALISIS = 480;
+const MARGEN_MIRA = 0.25;
+
+/**
+ * Traduce el recuadro visible de la cámara a coordenadas del video original.
+ * El video usa object-fit: cover, así que primero quitamos la parte que queda
+ * recortada por la pantalla y después aplicamos el margen de la mira.
+ */
+export function calcularRecorteCentral(vw, vh, anchoVista = vw, altoVista = vh, margen = MARGEN_MIRA) {
+  if (!(vw > 0 && vh > 0 && anchoVista > 0 && altoVista > 0)) return null;
+  const aspectoVideo = vw / vh;
+  const aspectoVista = anchoVista / altoVista;
+  let visibleX = 0, visibleY = 0, visibleW = vw, visibleH = vh;
+
+  if (aspectoVideo > aspectoVista) {
+    visibleW = vh * aspectoVista;
+    visibleX = (vw - visibleW) / 2;
+  } else if (aspectoVideo < aspectoVista) {
+    visibleH = vw / aspectoVista;
+    visibleY = (vh - visibleH) / 2;
+  }
+
+  return {
+    x: visibleX + visibleW * margen,
+    y: visibleY + visibleH * margen,
+    ancho: visibleW * (1 - margen * 2),
+    alto: visibleH * (1 - margen * 2),
+  };
+}
 
 export class Escaner {
   /**
@@ -70,13 +98,12 @@ export class Escaner {
     this.motor = await Escaner.motorDisponible();
     if (this.motor === 'navegador') {
       this.detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-    } else {
-      this.lienzo = document.createElement('canvas');
-      // willReadFrequently le avisa al navegador que vamos a leer los pixeles de
-      // cada cuadro; sin eso, algunos mantienen la imagen en la placa de video y
-      // cada lectura obliga a traerla de vuelta.
-      this.contexto = this.lienzo.getContext('2d', { willReadFrequently: true });
     }
+    // Los dos motores analizan un canvas recortado. Esto es imprescindible cuando
+    // una ficha muestra varios stickers: solo debe entrar el QR que está dentro de
+    // la mira central, no cualquiera que aparezca en una esquina de la cámara.
+    this.lienzo = document.createElement('canvas');
+    this.contexto = this.lienzo.getContext('2d', { willReadFrequently: true });
 
     const video = idCamara
       ? { deviceId: { exact: idCamara } }
@@ -133,20 +160,47 @@ export class Escaner {
 
   /** Lee un cuadro con el motor que corresponda. Devuelve el texto o null. */
   async _leerCuadro() {
-    if (this.motor === 'navegador') {
-      const codigos = await this.detector.detect(this.video);
-      return codigos[0]?.rawValue?.trim() || null;
-    }
-
     const vw = this.video.videoWidth, vh = this.video.videoHeight;
     if (!vw || !vh) return null;
-    const escala = Math.min(1, ANCHO_ANALISIS / vw);
-    const w = Math.round(vw * escala), h = Math.round(vh * escala);
+    const recorte = calcularRecorteCentral(
+      vw, vh,
+      this.video.clientWidth || vw,
+      this.video.clientHeight || vh
+    );
+    if (!recorte) return null;
+
+    const escala = Math.min(1, ANCHO_ANALISIS / recorte.ancho);
+    const w = Math.round(recorte.ancho * escala);
+    const h = Math.round(recorte.alto * escala);
     if (this.lienzo.width !== w || this.lienzo.height !== h) {
       this.lienzo.width = w;
       this.lienzo.height = h;
     }
-    this.contexto.drawImage(this.video, 0, 0, w, h);
+    this.contexto.drawImage(
+      this.video,
+      recorte.x, recorte.y, recorte.ancho, recorte.alto,
+      0, 0, w, h
+    );
+
+    if (this.motor === 'navegador') {
+      const codigos = await this.detector.detect(this.lienzo);
+      if (!codigos.length) return null;
+      // Si aun entran dos códigos parcialmente, elegimos el más cercano al centro
+      // de la mira en vez de confiar en el orden arbitrario del navegador.
+      const cx = w / 2, cy = h / 2;
+      codigos.sort((a, b) => {
+        const distancia = codigo => {
+          const caja = codigo.boundingBox;
+          if (!caja) return Number.POSITIVE_INFINITY;
+          const dx = caja.x + caja.width / 2 - cx;
+          const dy = caja.y + caja.height / 2 - cy;
+          return dx * dx + dy * dy;
+        };
+        return distancia(a) - distancia(b);
+      });
+      return codigos[0]?.rawValue?.trim() || null;
+    }
+
     const imagen = this.contexto.getImageData(0, 0, w, h);
     return decodificar(imagen.data, w, h)?.texto?.trim() || null;
   }

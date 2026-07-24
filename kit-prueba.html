@@ -28,6 +28,20 @@
     border: 1px solid var(--borde); border-radius: var(--radio);
     padding: 12px 16px; margin-bottom: 16px; box-shadow: var(--sombra);
   }
+  .sticker-kit[role="button"] { cursor: zoom-in; }
+  #visor-qr {
+    width: min(92vw, 520px); border: 1px solid var(--borde); border-radius: 14px;
+    padding: 18px; background: white; color: #111; box-shadow: var(--sombra);
+  }
+  #visor-qr::backdrop { background: #000c; }
+  #visor-contenido .sticker-kit {
+    display: flex; align-items: center; justify-content: center; gap: 20px;
+    border: 0; padding: 10px; cursor: default;
+  }
+  #visor-contenido svg { width: min(62vw, 340px); height: auto; flex: 0 0 auto; }
+  #visor-contenido .rotulo-kit { font-size: 1rem; max-width: 180px; }
+  #cerrar-visor { display: block; margin: 12px auto 0; }
+  @media print { #visor-qr { display: none !important; } }
 </style>
 </head>
 <body>
@@ -42,30 +56,41 @@
     <h2>Qué es esto</h2>
     <p class="chico tenue" style="margin-top:-6px">
       Elegí cualquier club y el sistema preparará dos hojas: su ficha de ensayo y una
-      tanda de stickers exclusiva para esa prueba. Los stickers no son de relleno —
-      cada uno dispara una situación distinta, incluidas las tres trampas que el
-      sistema tiene que cazar.
+      tanda de stickers genéricos. El club <strong>no está dentro de los QR de
+      eventos</strong>: cualquier tanda nueva puede usarse por primera vez con
+      cualquier club.
     </p>
     <div class="fila" style="margin:14px 0">
       <div style="flex:1 1 360px">
         <label for="club-kit">Club para esta prueba</label>
         <select id="club-kit"></select>
       </div>
+      <div>
+        <label>Tanda de QR</label>
+        <button id="nueva-tanda">Crear una tanda nueva</button>
+      </div>
+      <div>
+        <label>Serial inicial</label>
+        <div class="pastilla info" id="tanda-kit">—</div>
+      </div>
     </div>
     <div class="aviso-caja">
       Si no tenés impresora, sirve igual: escaneá los códigos directamente
-      <strong>desde la pantalla</strong> con el celular. Se leen perfecto.
+      <strong>desde la pantalla</strong> con el celular. Tocá un sticker para verlo
+      grande y aislado antes de apuntarle con la cámara.
     </div>
     <div class="aviso-caja alerta" style="margin-top:10px">
-      Cada club recibe seriales de prueba diferentes. Si cambiás el club, descargá
-      nuevamente el inventario antes de escanear. Si enviás el resultado a Sheets,
-      hacelo en la planilla de prueba: aparecerá como la evaluación de ese club.
+      Una misma tanda puede asignarse a cualquier club, pero no reutilizarse en dos:
+      eso simularía stickers prestados. Si ya escaneaste estos QR, tocá
+      <strong>Crear una tanda nueva</strong> y descargá su nuevo inventario.
     </div>
   </section>
 
   <section class="panel no-imprimir">
     <h2>Cómo probarlo</h2>
     <ol class="pasos">
+      <li>Elegí el club. Si estos QR ya fueron escaneados antes, tocá
+        <strong>Crear una tanda nueva</strong>.</li>
       <li><strong>Imprimí estas dos hojas</strong> con el botón de abajo. Al 100%, sin
         "ajustar a página". O dejalas en pantalla para escanear desde ahí.</li>
       <li><strong>Descargá el inventario</strong> del kit (botón de abajo) y cargalo en
@@ -100,6 +125,11 @@
   <div id="salida"></div>
 </main>
 
-<script type="module" src="js/kit-prueba.js?v=2"></script>
+<dialog id="visor-qr" class="no-imprimir">
+  <div id="visor-contenido"></div>
+  <button id="cerrar-visor">Cerrar</button>
+</dialog>
+
+<script type="module" src="js/kit-prueba.js?v=3"></script>
 </body>
 </html>

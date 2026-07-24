@@ -4,7 +4,7 @@ import { CAMPORI, REGLAS, TOPE_FISICO, TOPE_ESPIRITUAL, etiquetaTipo } from './c
 import { CLUBES, buscarClub } from './clubes.js';
 import { leerQr } from './codigo.js';
 import { calcular, ESTADOS } from './puntaje.js';
-import { Escaner, pitido, vibrar, activarSonido } from './escaner.js';
+import { Escaner, pitido, vibrar, activarSonido } from './escaner.js?v=2';
 import { aXlsx, aCsv, descargar } from './exportar.js';
 import * as sheets from './sheets.js';
 import * as almacen from './almacen.js';

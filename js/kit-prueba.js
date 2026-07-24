@@ -15,26 +15,48 @@ const $ = s => document.querySelector(s);
 const escapar = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const svgDe = (texto, lado) => matrizASvg(generarMatriz(texto, { nivel: 'Q' }), { lado, margen: 4 });
 
-let club = buscarClub(CLUB_PRUEBA);
+const AJUSTE_CLUB = 'campori-kit-club-v1';
+const AJUSTE_TANDA = 'campori-kit-tanda-v1';
+const clubGuardado = sessionStorage.getItem(AJUSTE_CLUB);
+let club = buscarClub(clubGuardado) || buscarClub(CLUB_PRUEBA);
+
+function crearBaseTanda(anterior = null) {
+  let numero;
+  try {
+    const bytes = new Uint16Array(1);
+    crypto.getRandomValues(bytes);
+    numero = bytes[0];
+  } catch {
+    numero = Date.now();
+  }
+  let base = 7000 + (numero % 1500); // 7000–8499: fuera de las tandas normales.
+  if (base === anterior) base = 7000 + ((base - 6999) % 1500);
+  sessionStorage.setItem(AJUSTE_TANDA, String(base));
+  return base;
+}
+
+function leerBaseTanda() {
+  const guardada = Number(sessionStorage.getItem(AJUSTE_TANDA));
+  return guardada >= 7000 && guardada <= 8499 ? guardada : crearBaseTanda();
+}
+
+let baseTanda = leerBaseTanda();
 
 // ------------------------------------------------------------------ el guion
 
 // Cada entrada es un sticker del kit. `esperado` es lo que tiene que pasar al
 // escanearlo, y se usa tanto para el rotulo impreso como para la comprobacion
 // automatica que corre esta misma pagina.
-function crearGuion(clubElegido) {
-  // El rango 5000–9072 queda reservado para ensayos. El índice del club hace que
-  // Aziel, ediquin y cualquier otro reciban stickers diferentes aunque correspondan
-  // a los mismos eventos. El QR sigue sin llevar el club: solo cambia su serial.
-  const indice = CLUBES.findIndex(c => c.id === clubElegido.id) + 1;
-  const base = 5000 + indice;
+function crearGuion(base) {
+  // La tanda es independiente del club. Es el mismo modelo de los stickers reales:
+  // cualquiera puede recibirlos, pero cada ejemplar solo puede usarse una vez.
   return [
     ...EVENTOS_FISICOS.slice(0, 8).map((e, i) => ({
       codigo: e.codigo, serial: base + i, grupo: 'Los 8 eventos físicos',
       esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
     })),
     {
-      codigo: 'F03', serial: 6000 + indice, grupo: 'Trampas',
+      codigo: 'F03', serial: base + 100, grupo: 'Trampas',
       esperado: 'repetido', nota: 'Evento repetido: no suma',
       explicacion: 'Es otro sticker de un evento que el club ya hizo. La app lo marca en rojo.',
     },
@@ -44,7 +66,7 @@ function crearGuion(clubElegido) {
       explicacion: 'Pasado el cupo de 8, la app avisa y no lo cuenta.',
     },
     {
-      codigo: 'F12', serial: 9000 + indice, grupo: 'Trampas',
+      codigo: 'F12', serial: base + 200, grupo: 'Trampas',
       esperado: 'no_inventariado', nota: 'Serial que no imprimimos',
       explicacion: 'Está bien firmado pero su serial no figura en el inventario. Solo se detecta si cargaste el inventario en Ajustes.',
     },
@@ -60,15 +82,15 @@ function crearGuion(clubElegido) {
   ];
 }
 
-let GUION = crearGuion(club);
+let GUION = crearGuion(baseTanda);
 
-// El inventario del kit: todo lo que "imprimimos" de verdad. El sticker de serial
-// 9876 queda afuera a proposito, que es lo que lo delata.
+// El inventario del kit: todo lo que "imprimimos" de verdad. El sticker marcado
+// como no inventariado queda afuera a proposito, que es lo que lo delata.
 function crearInventario() {
   return {
     campori: CAMPORI.prefijo,
     generado: new Date().toISOString(),
-    clubPrueba: club.id,
+    tandaPrueba: baseTanda,
     stickers: GUION
       .filter(s => s.esperado !== 'no_inventariado')
       .map(s => `${s.codigo}-${String(s.serial).padStart(4, '0')}`),
@@ -162,7 +184,8 @@ function hojaStickers() {
         const evento = buscarEvento(s.codigo);
         const puntos = evento.puntos ?? PUNTOS_EVENTO;
         const trampa = s.esperado !== 'contado';
-        return `<div class="sticker-kit${trampa ? ' trampa' : ''}">
+        return `<div class="sticker-kit${trampa ? ' trampa' : ''}"
+          role="button" tabindex="0" title="Tocar para ampliar este QR">
           ${svgDe(armarSticker(s.codigo, puntos, s.serial), 24)}
           <div class="rotulo-kit">
             <strong>${s.codigo}</strong> · ${escapar(evento.nombre)}<br>
@@ -217,7 +240,7 @@ function bajarInventario() {
   const blob = new Blob([JSON.stringify(inventario, null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `inventario-kit-${club.id}.json`;
+  a.download = `inventario-kit-tanda-${baseTanda}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -229,6 +252,7 @@ function bajarInventario() {
 function pintarKit() {
   pintarGuion();
   $('#salida').innerHTML = hojaFicha() + hojaStickers();
+  $('#tanda-kit').textContent = String(baseTanda).padStart(4, '0');
   document.querySelectorAll('.club-kit-nombre').forEach(el => {
     el.textContent = club.nombre;
   });
@@ -241,10 +265,34 @@ $('#club-kit').innerHTML = CLUBES.map(c =>
 
 $('#club-kit').addEventListener('change', e => {
   club = buscarClub(e.target.value);
-  GUION = crearGuion(club);
+  sessionStorage.setItem(AJUSTE_CLUB, club.id);
+  pintarKit();
+});
+
+$('#nueva-tanda').addEventListener('click', () => {
+  baseTanda = crearBaseTanda(baseTanda);
+  GUION = crearGuion(baseTanda);
   inventario = crearInventario();
   pintarKit();
 });
+
+function ampliarSticker(tarjeta) {
+  $('#visor-contenido').innerHTML = tarjeta.innerHTML;
+  $('#visor-qr').showModal();
+}
+
+$('#salida').addEventListener('click', e => {
+  const tarjeta = e.target.closest('.sticker-kit');
+  if (tarjeta) ampliarSticker(tarjeta);
+});
+$('#salida').addEventListener('keydown', e => {
+  const tarjeta = e.target.closest('.sticker-kit');
+  if (tarjeta && (e.key === 'Enter' || e.key === ' ')) {
+    e.preventDefault();
+    ampliarSticker(tarjeta);
+  }
+});
+$('#cerrar-visor').addEventListener('click', () => $('#visor-qr').close());
 
 pintarKit();
 $('#imprimir').addEventListener('click', () => window.print());
