@@ -49,6 +49,7 @@ const estado = {
   puntajesHoja: new Map(),
   temporizadorSync: null,
   intervaloSync: null,
+  resolverDecisionCache: null,
   escaner: null,
   linternaEncendida: false,
 };
@@ -770,6 +771,9 @@ async function traerDeSheets(silencioso = false) {
 }
 
 async function sincronizarAutomaticamente({ forzarEnvio = false } = {}) {
+  // Hasta que el evaluador elija Subir o Descartar, ningún temporizador puede
+  // publicar silenciosamente la copia local que encontró en este teléfono.
+  if (!estado.conectado && !forzarEnvio) return;
   if (estado.sincronizando || !navigator.onLine) return;
   const url = $('#sheets-url').value.trim();
   const clave = $('#sheets-clave').value;
@@ -831,6 +835,61 @@ function mostrarEstadoConexion(nivel, texto) {
 function iniciarIntervaloSincronizacion() {
   clearInterval(estado.intervaloSync);
   estado.intervaloSync = setInterval(() => sincronizarAutomaticamente(), 20000);
+}
+
+function solicitarDecisionCache() {
+  const ids = [...estado.pendientes].filter(id => id !== CLUB_PRUEBA);
+  const conjunto = new Set(ids);
+  const cantidadEscaneos = estado.todos.filter(e => conjunto.has(e.idClub)).length;
+  const nombres = ids.map(id => buscarClub(id)?.nombre || id);
+
+  $('#conexion-configuracion').classList.add('oculto');
+  $('#conexion-cache').classList.remove('oculto');
+  $('#conexion-cache-resumen').textContent =
+    `${ids.length} club${ids.length === 1 ? '' : 'es'} con cambios pendientes · ` +
+    `${cantidadEscaneos} escaneo${cantidadEscaneos === 1 ? '' : 's'} guardado${cantidadEscaneos === 1 ? '' : 's'}.`;
+  $('#conexion-cache-clubes').textContent = nombres.length
+    ? `Clubes: ${nombres.join(', ')}.`
+    : 'También hay cambios de estado de fichas pendientes.';
+  for (const boton of $$('#conexion-cache button')) boton.disabled = false;
+
+  return new Promise(resolver => {
+    estado.resolverDecisionCache = resolver;
+  });
+}
+
+function responderDecisionCache(decision) {
+  if (!estado.resolverDecisionCache) return;
+  for (const boton of $$('#conexion-cache button')) boton.disabled = true;
+  const resolver = estado.resolverDecisionCache;
+  estado.resolverDecisionCache = null;
+  resolver(decision);
+}
+
+function restaurarFormularioConexion() {
+  $('#conexion-cache').classList.add('oculto');
+  $('#conexion-configuracion').classList.remove('oculto');
+  for (const boton of $$('#conexion-cache button')) boton.disabled = false;
+}
+
+async function descartarCacheYAplicar(remota) {
+  // La hoja es la fuente central: quitamos la copia de trabajo local completa y
+  // acto seguido la reconstruimos con el estado remoto ya leído.
+  await almacen.borrarTodo();
+  estado.pendientes.clear();
+  estado.eventosPendientes.clear();
+  await guardarPendientes();
+  estado.todos = [];
+  estado.fichas = new Map();
+  estado.escaneos = [];
+  estado.club = null;
+
+  const aplicada = await aplicarEstadoRemoto(remota);
+  if (!aplicada.ok) return aplicada;
+  estado.fichas = await almacen.fichas();
+  pintarClubes();
+  pintarDiagnostico();
+  return { ok: true };
 }
 
 async function conectarInicial() {
@@ -897,20 +956,47 @@ async function conectarInicial() {
   }
 
   if (estado.pendientes.size) {
-    mostrarEstadoConexion('', 'Enviando los cambios que estaban guardados en este teléfono…');
-    const enviada = await enviarClubes([...estado.pendientes], true);
-    if (!enviada.ok) {
+    $('#conexion-estado').innerHTML = '';
+    const decision = await solicitarDecisionCache();
+
+    if (decision === 'sin-conexion') {
+      estado.conectado = false;
+      restaurarFormularioConexion();
+      $('#conexion-inicial').classList.add('oculto');
+      mostrarEstadoSheets('aviso', 'Cambios locales conservados. Seguís trabajando sin conexión.');
       boton.disabled = false;
       boton.textContent = 'Conectar y sincronizar';
-      mostrarEstadoConexion('alerta', enviada.error || 'No se pudieron enviar los datos locales.');
       return;
     }
-    await traerDeSheets(true);
+
+    if (decision === 'descartar') {
+      mostrarEstadoConexion('', 'Descartando la copia local y cargando Google Sheets…');
+      const descartada = await descartarCacheYAplicar(remota);
+      if (!descartada.ok) {
+        restaurarFormularioConexion();
+        boton.disabled = false;
+        boton.textContent = 'Conectar y sincronizar';
+        mostrarEstadoConexion('alerta', descartada.error || 'No se pudo reemplazar la copia local.');
+        return;
+      }
+    } else {
+      mostrarEstadoConexion('', 'Subiendo los cambios guardados en este teléfono…');
+      const enviada = await enviarClubes([...estado.pendientes], true);
+      if (!enviada.ok) {
+        restaurarFormularioConexion();
+        boton.disabled = false;
+        boton.textContent = 'Conectar y sincronizar';
+        mostrarEstadoConexion('alerta', enviada.error || 'No se pudieron enviar los datos locales.');
+        return;
+      }
+      await traerDeSheets(true);
+    }
   }
 
   await almacen.guardarAjuste('sincronizacionBidireccional', true);
   estado.conectado = true;
   iniciarIntervaloSincronizacion();
+  restaurarFormularioConexion();
   $('#conexion-inicial').classList.add('oculto');
   mostrarEstadoSheets('ok', 'Conectado. La planilla se revisa automáticamente cada 20 segundos.');
   boton.disabled = false;
@@ -1086,6 +1172,9 @@ $('#sheets-probar').addEventListener('click', probarSheets);
 $('#sheets-enviar').addEventListener('click', enviarASheets);
 $('#sheets-traer').addEventListener('click', () => traerDeSheets(false));
 $('#conexion-conectar').addEventListener('click', conectarInicial);
+$('#conexion-cache-subir').addEventListener('click', () => responderDecisionCache('subir'));
+$('#conexion-cache-descartar').addEventListener('click', () => responderDecisionCache('descartar'));
+$('#conexion-cache-sin-conexion').addEventListener('click', () => responderDecisionCache('sin-conexion'));
 $('#conexion-omitir').addEventListener('click', () => {
   estado.conectado = false;
   $('#conexion-inicial').classList.add('oculto');

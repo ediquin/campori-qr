@@ -7,7 +7,7 @@
 // seria mas rapido, pero durante el armado del sistema conviene que cada recarga traiga
 // la version nueva sin tener que andar limpiando cache a mano.
 
-const CACHE = 'campori-qr-v29';
+const CACHE = 'campori-qr-v30';
 
 const ARCHIVOS = [
   './',
@@ -48,6 +48,7 @@ const ARCHIVOS = [
   './js/evaluador.js?v=10',
   './js/evaluador.js?v=11',
   './js/evaluador.js?v=12',
+  './js/evaluador.js?v=13',
   './js/kit-prueba.js',
   './js/kit-prueba.js?v=7',
   './js/escaner.js',

@@ -127,28 +127,55 @@
   }
   .conexion-tarjeta h2 { margin: 0 0 8px; color: var(--acento); }
   .conexion-tarjeta input { width: 100%; margin-bottom: 12px; }
+  .conexion-cache {
+    border: 1px solid #ffb43f66; border-radius: 12px;
+    background: #ffb43f0d; padding: 16px; margin-top: 14px;
+  }
+  .conexion-cache h3 { color: var(--aviso); margin: 0 0 8px; font-size: 1rem; }
+  .conexion-cache .acciones { display: grid; gap: 10px; margin-top: 14px; }
+  .conexion-cache .acciones button { width: 100%; }
 </style>
 </head>
 <body>
 
 <section class="conexion-inicial" id="conexion-inicial">
   <div class="conexion-tarjeta">
-    <h2>Conectar con Google Sheets</h2>
-    <p class="chico tenue">
-      La hoja <strong>Puntajes</strong> será la fuente central. Los cambios del
-      teléfono se enviarán automáticamente y, al recargar o volver a la app,
-      se mostrarán los valores más recientes de Google Sheets.
-    </p>
-    <label for="conexion-url">Dirección del Apps Script</label>
-    <input type="url" id="conexion-url"
-      placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
-    <label for="conexion-clave">Clave</label>
-    <input type="password" id="conexion-clave" placeholder="la misma del script" autocomplete="off">
-    <label for="conexion-dispositivo">Nombre del evaluador o teléfono</label>
-    <input type="text" id="conexion-dispositivo" placeholder="Ej: Heber, o Celular 2" maxlength="40">
-    <div class="fila">
-      <button class="principal" id="conexion-conectar">Conectar y sincronizar</button>
-      <button id="conexion-omitir">Continuar sin conexión</button>
+    <div id="conexion-configuracion">
+      <h2>Conectar con Google Sheets</h2>
+      <p class="chico tenue">
+        La hoja <strong>Puntajes</strong> será la fuente central. Los cambios del
+        teléfono se enviarán automáticamente y, al recargar o volver a la app,
+        se mostrarán los valores más recientes de Google Sheets.
+      </p>
+      <label for="conexion-url">Dirección del Apps Script</label>
+      <input type="url" id="conexion-url"
+        placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+      <label for="conexion-clave">Clave</label>
+      <input type="password" id="conexion-clave" placeholder="la misma del script" autocomplete="off">
+      <label for="conexion-dispositivo">Nombre del evaluador o teléfono</label>
+      <input type="text" id="conexion-dispositivo" placeholder="Ej: Heber, o Celular 2" maxlength="40">
+      <div class="fila">
+        <button class="principal" id="conexion-conectar">Conectar y sincronizar</button>
+        <button id="conexion-omitir">Continuar sin conexión</button>
+      </div>
+    </div>
+    <div class="conexion-cache oculto" id="conexion-cache">
+      <h3>Hay cambios guardados en este teléfono</h3>
+      <p id="conexion-cache-resumen"></p>
+      <p class="chico tenue" id="conexion-cache-clubes"></p>
+      <p class="chico">
+        Google Sheets ya fue consultado y estos cambios todavía no se enviaron.
+        Elegí qué hacer con esta copia local antes de continuar.
+      </p>
+      <div class="acciones">
+        <button class="principal" id="conexion-cache-subir">Subir cambios a Google Sheets</button>
+        <button class="peligro" id="conexion-cache-descartar">Descartar cambios y usar Google Sheets</button>
+        <button id="conexion-cache-sin-conexion">Seguir sin conexión por ahora</button>
+      </div>
+      <p class="chico tenue">
+        Descartar borra los escaneos y estados locales de este teléfono. La dirección,
+        la clave y el nombre del evaluador se conservan.
+      </p>
     </div>
     <div id="conexion-estado" style="margin-top:12px"></div>
   </div>
@@ -367,6 +394,6 @@
   <button data-vista="ajustes">Ajustes</button>
 </nav>
 
-<script type="module" src="js/evaluador.js?v=12"></script>
+<script type="module" src="js/evaluador.js?v=13"></script>
 </body>
 </html>

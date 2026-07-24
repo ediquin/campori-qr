@@ -105,6 +105,12 @@ la pantalla **Conectar con Google Sheets**. Después de conectarse:
 2. La aplicación revisa la planilla al recargar, cada 20 segundos y al volver a primer plano.
 3. Sin señal, los cambios quedan pendientes en el teléfono y se envían al reconectar.
 
+Si al conectarse ya existen cambios pendientes en el teléfono, la aplicación se
+detiene antes de enviar y ofrece tres opciones: **subirlos**, **descartarlos y usar
+Google Sheets**, o **seguir sin conexión**. Descartar elimina solamente la copia
+local de escaneos y estados; conserva la dirección, la clave y el nombre del
+evaluador, y reconstruye los resultados con lo que exista en la planilla.
+
 El detalle siempre se envía: es indispensable para detectar el mismo serial en dos
 clubes. Si eso ocurre, **ninguno recibe los puntos** hasta que se aclare el incidente
 con los directores y se corrija manualmente la planilla final.
