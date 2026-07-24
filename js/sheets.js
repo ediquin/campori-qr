@@ -14,6 +14,16 @@
 
 export const URL_PREDETERMINADA =
   'https://script.google.com/macros/s/AKfycby2PyREewpwwiTkPXoceYlAUsH2pzDYbMMtZ3c6EVP0Oc_eE-7-otfUdoeSlgGLVCb0/exec';
+const URL_PREDETERMINADA_ANTERIOR =
+  'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
+
+/** Actualiza solamente el endpoint oficial anterior; respeta URLs personalizadas. */
+export function migrarUrlPredeterminada(url = '') {
+  const actual = String(url || '').trim();
+  return !actual || actual === URL_PREDETERMINADA_ANTERIOR
+    ? URL_PREDETERMINADA
+    : actual;
+}
 
 /**
  * Manda las hojas a la planilla.

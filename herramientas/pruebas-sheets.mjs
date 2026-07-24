@@ -12,6 +12,7 @@
 // si cambia una, hay que cambiar la otra.
 
 import {
+  URL_PREDETERMINADA, migrarUrlPredeterminada,
   normalizarSeriales, normalizarEscaneos, conflictosRemotosParaClub,
 } from '../js/sheets.js';
 
@@ -182,6 +183,17 @@ grupo('Sincronizacion bidireccional');
   });
   comprobar('borrar la ultima fila de un club tambien se sincroniza',
     corregida, [['ID', 'Código QR'], ['C002', 'F02-BBBBBBBB']]);
+}
+
+{
+  const anterior = 'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
+  const personalizada = 'https://script.google.com/macros/s/personalizada/exec';
+  comprobar('los telefonos nuevos reciben la URL vigente',
+    migrarUrlPredeterminada(''), URL_PREDETERMINADA);
+  comprobar('la implementacion oficial anterior se migra',
+    migrarUrlPredeterminada(anterior), URL_PREDETERMINADA);
+  comprobar('una URL personalizada se conserva',
+    migrarUrlPredeterminada(personalizada), personalizada);
 }
 
 {

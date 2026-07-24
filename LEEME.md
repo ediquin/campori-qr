@@ -248,7 +248,7 @@ redundancia disponible y conserva el patrón de alineación para leerlo inclinad
 
 ## Las pruebas
 
-375 comprobaciones, sin framework:
+378 comprobaciones, sin framework:
 
 - **Núcleo** — la firma coincide con `crypto` de Node; se rechazan QR alterados en
   cualquier campo; el motor de puntaje cumple las reglas y detecta cada trampa.

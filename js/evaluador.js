@@ -747,8 +747,10 @@ async function iniciar() {
   $('#nombre-dispositivo').value = estado.dispositivo;
   // La direccion oficial ya viene lista. Un valor guardado permite reemplazarla si
   // alguna vez se publica una implementacion nueva con otra URL.
-  $('#sheets-url').value =
-    await almacen.leerAjuste('sheetsUrl', '') || sheets.URL_PREDETERMINADA;
+  const urlGuardada = await almacen.leerAjuste('sheetsUrl', '');
+  const urlVigente = sheets.migrarUrlPredeterminada(urlGuardada);
+  $('#sheets-url').value = urlVigente;
+  if (urlVigente !== urlGuardada) await almacen.guardarAjuste('sheetsUrl', urlVigente);
   $('#sheets-clave').value = await almacen.leerAjuste('sheetsClave', '') || '';
   $('#conexion-url').value = $('#sheets-url').value;
   $('#conexion-clave').value = $('#sheets-clave').value;
