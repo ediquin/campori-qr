@@ -31,8 +31,7 @@ JavaScript que el navegador abre tal cual. Funciona sin señal.
 | Adicional | criterios sueltos | 100 / 50 | Aparte del puntaje base | — |
 
 Cada sticker lleva un número de serie único y una firma, así que el sistema detecta
-eventos repetidos, stickers fotocopiados, stickers prestados entre clubes y códigos
-fabricados por fuera.
+eventos repetidos, stickers fotocopiados y stickers prestados entre clubes.
 
 ## Correrlo localmente
 
@@ -53,13 +52,13 @@ un subdirectorio.
 **La cámara necesita HTTPS.** Es el único requisito real: sin eso el navegador la
 bloquea. `localhost` también cuenta como seguro, para probar en la computadora.
 
-## Dos cosas antes de usarlo en serio
+## Antes de usarlo en serio
 
 1. **Cambiá la clave de firma** en [`js/catalogo.js`](js/catalogo.js) antes de
    imprimir. Es lo que hace que un QR sea nuestro y no de cualquiera.
-2. **Guardá el inventario** que descarga el generador. Sin ese archivo no se puede
-   distinguir un sticker que imprimimos de uno fabricado por fuera, y no se puede
-   reconstruir.
+El evaluador está en modo de **inventario automático**: no hay que cargar archivos
+en los teléfonos. Todo QR con firma válida y evento conocido puede usarse por primera
+vez con cualquier club.
 
 ## Datos personales
 

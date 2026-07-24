@@ -2,7 +2,7 @@
 // lleva un club: cada uno tiene solamente evento, puntos, serial unico y firma.
 
 import {
-  CAMPORI, PUNTOS_EVENTO,
+  PUNTOS_EVENTO,
   EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES, buscarEvento,
 } from './catalogo.js';
 import { armarSticker } from './codigo.js';
@@ -60,11 +60,6 @@ function crearGuion(base) {
       esperado: 'excedente', nota: 'Noveno físico: no suma',
       explicacion: 'Pasado el cupo de 8, la app avisa y no lo cuenta.',
     },
-    {
-      codigo: 'F12', serial: base + 200, grupo: 'Trampas',
-      esperado: 'no_inventariado', nota: 'Serial que no imprimimos',
-      explicacion: 'Está bien firmado pero su serial no figura en el inventario. Solo se detecta si cargaste el inventario en Ajustes.',
-    },
     ...EVENTOS_ESPIRITUALES.map((e, i) => ({
       codigo: e.codigo, serial: base + i, grupo: 'Los 7 espirituales (obligatorios)',
       esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
@@ -79,21 +74,6 @@ function crearGuion(base) {
 
 let GUION = crearGuion(baseTanda);
 
-// El inventario del kit: todo lo que "imprimimos" de verdad. El sticker marcado
-// como no inventariado queda afuera a proposito, que es lo que lo delata.
-function crearInventario() {
-  return {
-    campori: CAMPORI.prefijo,
-    generado: new Date().toISOString(),
-    tandaPrueba: baseTanda,
-    stickers: GUION
-      .filter(s => s.esperado !== 'no_inventariado')
-      .map(s => `${s.codigo}-${String(s.serial).padStart(4, '0')}`),
-  };
-}
-
-let inventario = crearInventario();
-
 // ------------------------------------------------------------------ resultado esperado
 
 // Corremos el guion por el mismo motor que usa la app, para que el resultado
@@ -104,7 +84,7 @@ function resultadoEsperado() {
     crudo: armarSticker(s.codigo, buscarEvento(s.codigo).puntos ?? PUNTOS_EVENTO, s.serial),
     ts: reloj += 1000,
   }));
-  return calcular(escaneos, { inventario: new Set(inventario.stickers) });
+  return calcular(escaneos);
 }
 
 // ------------------------------------------------------------------ hoja
@@ -176,17 +156,6 @@ function pintarGuion() {
   $('#total-esperado').textContent = r.total;
 }
 
-function bajarInventario() {
-  const blob = new Blob([JSON.stringify(inventario, null, 1)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `inventario-kit-tanda-${baseTanda}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
 // ------------------------------------------------------------------ arranque
 
 function pintarKit() {
@@ -198,7 +167,6 @@ function pintarKit() {
 $('#nueva-tanda').addEventListener('click', () => {
   baseTanda = crearBaseTanda(baseTanda);
   GUION = crearGuion(baseTanda);
-  inventario = crearInventario();
   pintarKit();
 });
 
@@ -222,4 +190,3 @@ $('#cerrar-visor').addEventListener('click', () => $('#visor-qr').close());
 
 pintarKit();
 $('#imprimir').addEventListener('click', () => window.print());
-$('#bajar-inventario').addEventListener('click', bajarInventario);

@@ -249,19 +249,14 @@
     </div>
 
     <div class="panel">
-      <h2>Inventario de stickers</h2>
+      <h2>Inventario automático</h2>
       <p class="chico tenue" style="margin-top:-6px">
-        Cargá el archivo que descargaste del generador. Sin él la app valida la firma
-        del QR pero no puede distinguir un sticker que imprimimos nosotros de uno
-        fabricado por fuera con el mismo formato.
+        No hace falta cargar archivos. Todo QR creado por el generador, con firma
+        válida y un evento conocido, queda habilitado para cualquier club.
       </p>
-      <div id="estado-inventario" class="aviso-caja">Sin inventario cargado.</div>
-      <div class="fila">
-        <div>
-          <label for="cargar-inventario">Archivo de inventario (.json)</label>
-          <input type="file" id="cargar-inventario" accept="application/json,.json">
-        </div>
-        <div><button id="quitar-inventario">Quitar inventario</button></div>
+      <div class="aviso-caja ok" style="margin-bottom:0">
+        <strong>Activo.</strong> Los seriales repetidos y usados por dos clubes se
+        siguen detectando normalmente.
       </div>
     </div>
 
@@ -344,6 +339,6 @@
   <button data-vista="ajustes">Ajustes</button>
 </nav>
 
-<script type="module" src="js/evaluador.js?v=3"></script>
+<script type="module" src="js/evaluador.js?v=4"></script>
 </body>
 </html>

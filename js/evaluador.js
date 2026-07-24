@@ -26,7 +26,7 @@ const estado = {
   escaneos: [],         // escaneos del club actual, en orden
   todos: [],            // todos los escaneos de todos los clubes
   fichas: new Map(),
-  inventario: null,     // Set de ids de sticker impresos, o null si no se cargo
+  inventario: null,     // legado; el modo automático lo ignora
   dispositivo: '',      // quien evalua con este telefono
   // Que sticker uso cada club segun la planilla compartida. Es lo que permite
   // detectar un sticker prestado entre clubes que evaluaron personas distintas:
@@ -70,7 +70,9 @@ function idDeSticker(crudo) {
 
 function resultadoDe(idClub, escaneos) {
   return calcular(escaneos, {
-    inventario: estado.inventario,
+    // En el modo actual todo QR firmado por el generador queda autorizado. La
+    // unicidad se controla por serial localmente y mediante Google Sheets.
+    inventario: REGLAS.inventarioAutomatico ? null : estado.inventario,
     usadosPorOtros: usadosPorOtros(idClub),
   });
 }
@@ -437,7 +439,9 @@ function hojasParaExportar({ soloConEscaneos = false } = {}) {
     ['Eventos espirituales', `${REGLAS.espiritualesObligatorios}, todos obligatorios`],
     ['Máximo espiritual', TOPE_ESPIRITUAL],
     ['Máximo base', TOPE_FISICO + TOPE_ESPIRITUAL],
-    ['Inventario de stickers', estado.inventario ? `${estado.inventario.size} seriales cargados` : 'NO cargado'],
+    ['Inventario de stickers', REGLAS.inventarioAutomatico
+      ? 'Automático: todos los QR con firma válida'
+      : estado.inventario ? `${estado.inventario.size} seriales cargados` : 'Estricto: NO cargado'],
   ];
 
   // claveColumna le dice al script de Google por que columna fusionar. Las hojas
@@ -577,19 +581,6 @@ async function probarSheets() {
 
 // ------------------------------------------------------------------ ajustes
 
-function pintarEstadoInventario() {
-  const caja = $('#estado-inventario');
-  if (estado.inventario) {
-    caja.className = 'aviso-caja ok';
-    caja.innerHTML = `<strong>${estado.inventario.size}</strong> seriales cargados. ` +
-      'Los stickers que no estén en esta lista se marcan como no impresos por nosotros.';
-  } else {
-    caja.className = 'aviso-caja';
-    caja.innerHTML = '<strong>Sin inventario cargado.</strong> Se valida la firma de cada QR, ' +
-      'pero no se puede detectar un sticker fabricado por fuera con el formato correcto.';
-  }
-}
-
 async function pintarDiagnostico() {
   const seguro = window.isSecureContext;
   const todos = resultadosDeTodos();
@@ -598,8 +589,7 @@ async function pintarDiagnostico() {
       `Lector ${VERSION_LECTOR} · ${await Escaner.descripcionMotor()}`],
     [seguro ? '✅' : '❌', 'Contexto seguro (HTTPS)',
       seguro ? 'Sí, la cámara puede abrirse' : 'No. Sin HTTPS el navegador bloquea la cámara.'],
-    [estado.inventario ? '✅' : '⚠️', 'Inventario de stickers',
-      estado.inventario ? `${estado.inventario.size} seriales` : 'No cargado'],
+    ['✅', 'Inventario de stickers', 'Automático · sin archivo'],
     ['📋', 'Clubes en el padrón', String(CLUBES.length)],
     [estado.remotos.size ? '✅' : '⚠️', 'Stickers usados por otros clubes',
       estado.remotos.size
@@ -641,7 +631,6 @@ async function iniciar() {
   $('#m-fisicos .valor').textContent = `0/${REGLAS.fisicosQueCuentan}`;
   $('#m-espirituales .valor').textContent = `0/${REGLAS.espiritualesObligatorios}`;
 
-  pintarEstadoInventario();
   pintarEstadoRemotos();
   pintarClubes();
 
@@ -714,38 +703,6 @@ $('#exportar-excel').addEventListener('click', () => {
 });
 $('#exportar-csv').addEventListener('click', () => {
   descargar(aCsv(hojasParaExportar()[0].filas), `puntajes-campori-${hoy()}.csv`);
-});
-
-// --- inventario
-$('#cargar-inventario').addEventListener('change', e => {
-  const archivo = e.target.files[0];
-  e.target.value = '';
-  if (!archivo) return;
-  const lector = new FileReader();
-  lector.onload = async () => {
-    try {
-      const datos = JSON.parse(lector.result);
-      if (datos.campori !== CAMPORI.prefijo) {
-        alert(`Ese inventario es del campori "${datos.campori}" y este es "${CAMPORI.prefijo}".`);
-        return;
-      }
-      if (!Array.isArray(datos.stickers)) { alert('El archivo no trae la lista de stickers.'); return; }
-      estado.inventario = new Set(datos.stickers);
-      await almacen.guardarAjuste('inventario', datos.stickers);
-      pintarEstadoInventario();
-      pintarClubes();
-      alert(`Inventario cargado: ${datos.stickers.length} seriales.`);
-    } catch (err) {
-      alert('No pude leer el archivo: ' + err.message);
-    }
-  };
-  lector.readAsText(archivo);
-});
-$('#quitar-inventario').addEventListener('click', async () => {
-  estado.inventario = null;
-  await almacen.guardarAjuste('inventario', null);
-  pintarEstadoInventario();
-  pintarClubes();
 });
 
 // --- este telefono

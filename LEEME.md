@@ -26,7 +26,6 @@ Lo que el sistema detecta solo:
 - **Sticker escaneado dos veces** — la misma fotocopia pegada dos veces.
 - **Sticker de otro club** — uno despegado de otra ficha. Dice de qué club era.
 - **QR falsificado** — cualquiera que no lleve nuestra firma.
-- **Sticker no impreso por nosotros** — firma válida pero serial fuera del inventario.
 - **Espirituales faltantes** — lista cuáles.
 
 ---
@@ -54,13 +53,10 @@ Abrí `generador.html`:
 1. **Hojas de stickers.** Elegí los eventos y cuántos por evento (80 alcanza:
    son 71 clubes). Cada hoja A4 trae 63 stickers de 24 mm de un mismo evento,
    listos para recortar y darle al juez de esa estación.
-2. **Descargá el inventario.** Es un `.json` con todos los seriales impresos.
-   **Guardalo bien.** Si lo perdés no se puede reconstruir, y sin él la app no
-   puede distinguir un sticker nuestro de uno fabricado por fuera.
-3. **Fichas de evaluación.** Una hoja por club, con su QR en la cabecera.
+2. **Fichas de evaluación.** Una hoja por club, con su QR en la cabecera.
 
-Si imprimís en varias tandas, **cargá el inventario anterior antes de generar la
-siguiente**: así los seriales continúan la numeración en vez de repetirse.
+El generador permite descargar un inventario como respaldo, pero el evaluador está
+en modo automático y no exige cargarlo en los teléfonos.
 
 Papel: cualquier hoja autoadhesiva A4. Imprimí **al 100%, sin "ajustar a página"**,
 o los 24 mm dejan de ser 24 mm.
@@ -74,12 +70,11 @@ completa. El club los pega en su ficha.
 
 Abrí `evaluador.html` en el celular:
 
-1. En **Ajustes**, cargá el inventario. Una sola vez por teléfono.
-2. Elegí el club, o **escaneá el QR de la cabecera de la ficha** (más rápido).
-3. Encendé la cámara y pasá cada sticker. Suena y vibra en cada escaneo:
+1. Elegí el club, o **escaneá el QR de la cabecera de la ficha** (más rápido).
+2. Encendé la cámara y pasá cada sticker. Suena y vibra en cada escaneo:
    un tono ascendente si sumó, otro distinto si hay problema.
-4. Tocá **Marcar ficha como terminada**.
-5. En **Resultados**, **Descargar Excel**.
+3. Tocá **Marcar ficha como terminada**.
+4. En **Resultados**, **Descargar Excel**.
 
 ### Evaluando entre varios
 
@@ -248,10 +243,10 @@ evento vino, que es justo lo que hace falta para detectar repetidos.
 se puede detectar un evento repetido, pero no una fotocopia ni un sticker prestado
 entre clubes.
 
-**Sobre la firma.** Es HMAC-SHA256 truncada. No es inviolable: quien tenga el código
-fuente puede generar un QR válido. Lo que realmente frena la falsificación es el
-inventario de seriales — un QR bien firmado pero con un serial que no imprimimos
-queda rechazado igual. Por eso importa guardar ese archivo.
+**Sobre la firma.** Es HMAC-SHA256 truncada. El modo operativo actual acepta
+automáticamente cualquier QR con firma válida y evento conocido, sin inventario
+manual. Esto agiliza la preparación, pero renuncia a distinguir un serial firmado
+que nunca salió de la impresión oficial.
 
 **Por qué 24 mm.** El código entra en un símbolo QR versión 2 (25×25 módulos) con
 corrección de error nivel Q, que tolera hasta un 25% de daño. A 24 mm cada módulo

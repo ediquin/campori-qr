@@ -97,23 +97,22 @@
     </section>
 
     <section class="panel">
-      <h2>Inventario de seriales</h2>
+      <h2>Respaldo opcional de seriales</h2>
       <p class="chico tenue" style="margin-top:-6px">
-        Guardá este archivo apenas termines de imprimir y cargalo en la app evaluadora.
-        Sin él la app igual valida la firma del QR, pero no puede distinguir un sticker
-        que imprimimos nosotros de uno fabricado por fuera.
+        El evaluador actual usa inventario automático: <strong>no hace falta cargar
+        este archivo en los teléfonos</strong>. Podés descargarlo solo como respaldo
+        de los seriales impresos.
       </p>
 
-      <div class="aviso-caja alerta">
-        <strong>Si perdés este archivo no se puede reconstruir.</strong>
-        Cargalo de nuevo acá antes de imprimir una segunda tanda, así los seriales
-        siguen la numeración en vez de repetirse.
+      <div class="aviso-caja">
+        Si imprimís en varias tandas, cargar el respaldo anterior permite continuar
+        la numeración. Es opcional para el funcionamiento del evaluador.
       </div>
 
       <div id="resumen-inventario" class="chico" style="margin:12px 0"></div>
 
       <div class="fila">
-        <div><button class="principal" id="bajar-inventario" disabled>Descargar inventario</button></div>
+        <div><button id="bajar-inventario" disabled>Descargar respaldo</button></div>
         <div>
           <label for="subir-inventario">Cargar un inventario anterior</label>
           <input type="file" id="subir-inventario" accept="application/json,.json">

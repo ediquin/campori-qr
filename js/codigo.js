@@ -15,9 +15,9 @@
 // celular lee sin esfuerzo aunque el sticker quede algo arrugado.
 //
 // Sobre la firma: no pretende ser inviolable. Cualquiera con el codigo fuente puede
-// generar un QR valido. Lo que realmente frena la falsificacion es el inventario de
-// seriales que produce el generador: un QR bien formado pero cuyo serial no fue
-// impreso por nosotros, o que ya se uso en otra ficha, queda rechazado igual.
+// generar un QR valido. En el modo operativo actual se prioriza no depender de un
+// archivo de inventario; las defensas principales son la firma y detectar seriales
+// repetidos dentro de una ficha o entre clubes.
 
 import { CAMPORI } from './catalogo.js';
 

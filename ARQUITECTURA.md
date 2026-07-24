@@ -159,7 +159,7 @@ Están puestas en cascada. Cada una tapa un agujero distinto:
 | Capa | Qué detecta | Qué NO detecta |
 |---|---|---|
 | **Firma HMAC** | QR fabricado con cualquier generador | Un QR hecho con el código fuente en mano |
-| **Inventario de seriales** | QR bien firmado pero que no salió de nuestra imprenta | Un sticker real usado mal |
+| **Inventario de seriales** | Desactivado en el modo operativo actual | Requeriría cargar un archivo en cada teléfono |
 | **Clave compuesta en la base** | El mismo sticker escaneado dos veces en la misma ficha | — |
 | **Evento ya contado** | Dos stickers distintos del mismo evento | — |
 | **Cupo de 8 físicos** | Más eventos de los permitidos | — |
@@ -170,12 +170,10 @@ Están puestas en cascada. Cada una tapa un agujero distinto:
 Es HMAC-SHA256 truncada a 20 bits. **No es inviolable**: el repositorio es público,
 así que quien lea [`js/catalogo.js`](js/catalogo.js) puede generar un QR válido.
 
-Lo que realmente frena la falsificación es el **inventario de seriales**: un QR bien
-firmado pero cuyo serial nunca se imprimió queda rechazado igual. Por eso el manual
-insiste en cambiar la clave antes de imprimir y en no perder el archivo de inventario.
-
-Las dos capas son complementarias, no redundantes: la firma rechaza basura al
-instante y sin consultar nada; el inventario es la defensa real.
+Por decisión operativa, el evaluador está en modo de **inventario automático**:
+acepta cualquier QR con firma válida y evento conocido. No hay que distribuir un
+archivo entre teléfonos. El costo de esa simplificación es que no puede distinguir
+un serial firmado que nunca salió de la impresión oficial.
 
 ### 4.2 La capa que depende de juntar los datos
 
@@ -202,7 +200,7 @@ otro club.
 |---|---|---|
 | `escaneos` | `[idClub, crudo]` | `{ idClub, crudo, ts, dispositivo }` — índices por `idClub` y por `crudo` |
 | `fichas` | `idClub` | `{ idClub, cerrada, actualizada }` |
-| `ajustes` | `clave` | inventario, nombre del dispositivo, config de Sheets, seriales remotos |
+| `ajustes` | `clave` | nombre del dispositivo, config de Sheets, seriales remotos; puede quedar un inventario heredado que el modo automático ignora |
 
 ### Padrón de clubes
 
@@ -245,7 +243,7 @@ Cada escaneo termina en exactamente uno de estos estados:
 | `excedente` | aviso | no — pasó el cupo de 8 |
 | `serial_repetido` | alerta | no — el mismo sticker dos veces |
 | `serial_ajeno` | alerta | no — ya lo usó otro club |
-| `no_inventariado` | alerta | no — no salió de nuestra imprenta |
+| `no_inventariado` | alerta | Estado disponible en el motor, no usado en el modo automático |
 | `desconocido` | alerta | no — código fuera del catálogo |
 | `invalido` | alerta | no — firma mala o formato ilegible |
 
@@ -256,9 +254,8 @@ Cada escaneo termina en exactamente uno de estos estados:
 3. ¿Está el evento en el catálogo?
 4. ¿Ya escaneamos este serial en esta ficha?
 5. ¿Lo usó otro club?
-6. ¿Está en el inventario impreso?
-7. ¿Ya contamos este evento?
-8. ¿Se llenó el cupo de 8 físicos?
+6. ¿Ya contamos este evento?
+7. ¿Se llenó el cupo de 8 físicos?
 
 Un detalle sutil verificado por prueba: **un evento repetido no consume cupo**. Si un
 club pega F01 dos veces y después 7 eventos más, llega igual a los 8 que le
@@ -397,7 +394,7 @@ Todos medidos, no estimados:
 | Inclinación del lector propio | deja de leer más allá de **~45°** respecto de la perpendicular | Solo iPhone. Está anotado como prueba, así que si mejora o empeora, avisa. |
 | Versiones QR soportadas | 1 a 10 | Nuestros códigos son versión 2. Sobra. |
 | Desfase de relojes | no se corrige | La regla de "los 8 primeros" usa la hora del escaneo. Con relojes desfasados el orden puede salir mal. Solo se avisa. |
-| Firma | 20 bits, clave en repo público | Ver 4.1. El inventario es la defensa real. |
+| Firma | 20 bits, clave en repo público | Ver 4.1. El modo automático prioriza rapidez sobre control de emisión. |
 | Detección entre clubes | requiere juntar datos | Ver 4.2. |
 
 ---
@@ -406,8 +403,8 @@ Todos medidos, no estimados:
 
 Si el objetivo es dar feedback, mirar acá primero:
 
-1. **El inventario de seriales es irreemplazable.** Si se pierde ese `.json`, no se
-   puede reconstruir y se cae la defensa principal. No hay copia en ningún lado.
+1. **El inventario estricto está desactivado.** Un QR con firma válida y evento
+   conocido se acepta aunque su serial no figure en una lista de impresión.
 2. **La clave de firma está en un repositorio público.** Hay que cambiarla antes de
    imprimir. Si no, la firma no aporta nada.
 3. **Los criterios de puntaje adicional son de ejemplo.** `CRITERIOS_ADICIONALES` en
