@@ -1,18 +1,23 @@
 // App de evaluacion: escanea las fichas con la camara y arma el puntaje por club.
 
-import { CAMPORI, REGLAS, TOPE_FISICO, TOPE_ESPIRITUAL, etiquetaTipo } from './catalogo.js';
-import { CLUBES, buscarClub } from './clubes.js';
+import {
+  CAMPORI, REGLAS, TOPE_FISICO, TOPE_ESPIRITUAL, TODOS_LOS_ITEMS,
+  EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES, SANCIONES,
+  etiquetaTipo,
+} from './catalogo.js';
+import { CLUBES, CLUB_PRUEBA, buscarClub } from './clubes.js';
 import { leerQr } from './codigo.js';
 import { calcular, ESTADOS } from './puntaje.js';
 import { Escaner, VERSION_LECTOR, pitido, vibrar, activarSonido } from './escaner.js?v=5';
 import { aXlsx, aCsv, descargar } from './exportar.js';
-import * as sheets from './sheets.js?v=2';
+import * as sheets from './sheets.js?v=3';
 import * as almacen from './almacen.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const escapar = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const hoy = () => new Date().toISOString().slice(0, 10);
+const CLUBES_OFICIALES = CLUBES.filter(c => c.id !== CLUB_PRUEBA);
 
 // Muestra el puntaje con su signo: +200, -500, o — cuando no suma nada.
 const signo = n => n > 0 ? `+${n}` : n < 0 ? `${n}` : '—';
@@ -36,8 +41,12 @@ const estado = {
   remotos: new Map(),   // id de sticker -> ids de clubes, traidos de Sheets
   remotosFecha: null,
   conectado: false,
+  versionSheets: 0,
   sincronizando: false,
   pendientes: new Set(),
+  eventosPendientes: new Map(), // ID club -> códigos de las celdas modificadas
+  eventosHoja: [],
+  puntajesHoja: new Map(),
   temporizadorSync: null,
   intervaloSync: null,
   escaner: null,
@@ -75,10 +84,92 @@ function idDeSticker(crudo) {
   return l.ok && l.clase === 'sticker' ? l.id : null;
 }
 
-function resultadoDe(idClub, escaneos) {
+function resultadoLocal(idClub, escaneos) {
   return calcular(escaneos, {
     usadosPorOtros: usadosPorOtros(idClub),
   });
+}
+
+function puntajesPorEvento(resultado) {
+  const valores = Object.fromEntries(TODOS_LOS_ITEMS.map(e => [e.codigo, 0]));
+  for (const d of resultado.detalle || []) {
+    const codigo = d.evento?.codigo;
+    if (codigo && codigo in valores) valores[codigo] += Number(d.puntos) || 0;
+  }
+  return valores;
+}
+
+function codigosQueCambiaron(antes, despues) {
+  const a = puntajesPorEvento(antes);
+  const b = puntajesPorEvento(despues);
+  return TODOS_LOS_ITEMS.map(e => e.codigo).filter(codigo => a[codigo] !== b[codigo]);
+}
+
+/**
+ * Google Sheets manda para los números visibles. Mientras un cambio local está
+ * pendiente, se superponen únicamente las celdas que ese teléfono modificó.
+ */
+function resultadoConPuntajesDeHoja(idClub, base) {
+  const remota = estado.puntajesHoja.get(idClub);
+  if (!remota) return base;
+
+  const valores = { ...remota.eventos };
+  const pendientes = estado.eventosPendientes.get(idClub);
+  if (pendientes?.size) {
+    const locales = puntajesPorEvento(base);
+    for (const codigo of pendientes) valores[codigo] = locales[codigo] || 0;
+  }
+
+  const deTipo = (catalogo, tipo) => {
+    const eventos = catalogo
+      .filter(e => Number(valores[e.codigo]) !== 0)
+      .map(e => ({ evento: { ...e, tipo }, puntos: Number(valores[e.codigo]) || 0 }));
+    return { eventos, puntos: eventos.reduce((t, x) => t + x.puntos, 0) };
+  };
+  const fisico = deTipo(EVENTOS_FISICOS, 'fisico');
+  const espiritual = deTipo(EVENTOS_ESPIRITUALES, 'espiritual');
+  const adicional = deTipo(CRITERIOS_ADICIONALES, 'adicional');
+  const sancion = deTipo(SANCIONES, 'sancion');
+  const faltantes = EVENTOS_ESPIRITUALES.filter(e => !(Number(valores[e.codigo]) > 0));
+  const totalBruto = fisico.puntos + espiritual.puntos + adicional.puntos + sancion.puntos;
+
+  return {
+    ...base,
+    fisico: {
+      ...base.fisico,
+      puntos: fisico.puntos,
+      hechos: fisico.eventos.length,
+      eventos: fisico.eventos,
+    },
+    espiritual: {
+      ...base.espiritual,
+      puntos: espiritual.puntos,
+      hechos: espiritual.eventos.length,
+      eventos: espiritual.eventos,
+      faltantes,
+    },
+    adicional: { ...base.adicional, puntos: adicional.puntos, eventos: adicional.eventos },
+    sancion: {
+      ...base.sancion,
+      puntos: sancion.puntos,
+      eventos: sancion.eventos,
+      cantidad: base.sancion.cantidad || sancion.eventos.length,
+    },
+    totalBruto,
+    total: Math.max(0, totalBruto),
+    totalBase: fisico.puntos + espiritual.puntos,
+    completo: faltantes.length === 0 && fisico.eventos.length === REGLAS.fisicosQueCuentan,
+  };
+}
+
+function resultadoDe(idClub, escaneos) {
+  return resultadoConPuntajesDeHoja(idClub, resultadoLocal(idClub, escaneos));
+}
+
+function clubTienePuntaje(idClub, escaneos = []) {
+  if (escaneos.length) return true;
+  return Object.values(estado.puntajesHoja.get(idClub)?.eventos || {})
+    .some(valor => Number(valor) !== 0);
 }
 
 /** Recalcula todos los clubes de una. Se usa en la vista de resultados y al exportar. */
@@ -88,7 +179,7 @@ function resultadosDeTodos() {
     if (!porClub.has(e.idClub)) porClub.set(e.idClub, []);
     porClub.get(e.idClub).push(e);
   }
-  return CLUBES.map(club => {
+  return CLUBES_OFICIALES.map(club => {
     const escaneos = (porClub.get(club.id) || []).sort((a, b) => a.ts - b.ts);
     return { club, escaneos, resultado: resultadoDe(club.id, escaneos), ficha: estado.fichas.get(club.id) };
   });
@@ -117,11 +208,12 @@ function pintarClubes() {
   const todos = resultadosDeTodos();
 
   const visibles = todos.filter(({ club, escaneos, resultado, ficha }) => {
+    const conPuntaje = clubTienePuntaje(club.id, escaneos);
     if (region && club.region !== region) return false;
     if (texto && ![club.nombre, club.iglesia, club.region, club.id, club.distrito]
       .some(c => String(c).toLowerCase().includes(texto))) return false;
-    if (filtroEstado === 'sin' && escaneos.length) return false;
-    if (filtroEstado === 'curso' && (!escaneos.length || ficha?.cerrada)) return false;
+    if (filtroEstado === 'sin' && conPuntaje) return false;
+    if (filtroEstado === 'curso' && (!conPuntaje || ficha?.cerrada)) return false;
     if (filtroEstado === 'cerrada' && !ficha?.cerrada) return false;
     if (filtroEstado === 'alerta' && !resultado.alertas.some(a => a.nivel === 'alerta')) return false;
     return true;
@@ -133,12 +225,13 @@ function pintarClubes() {
   }
 
   $('#lista-clubes').innerHTML = visibles.map(({ club, escaneos, resultado, ficha }) => {
+    const conPuntaje = clubTienePuntaje(club.id, escaneos);
     const graves = resultado.alertas.filter(a => a.nivel === 'alerta').length;
     const marcas = [];
     if (ficha?.cerrada) marcas.push('<span class="pastilla ok">terminada</span>');
-    else if (escaneos.length) marcas.push('<span class="pastilla info">en curso</span>');
+    else if (conPuntaje) marcas.push('<span class="pastilla info">en curso</span>');
     if (graves) marcas.push(`<span class="pastilla alerta">${graves} alerta${graves === 1 ? '' : 's'}</span>`);
-    if (escaneos.length) {
+    if (conPuntaje) {
       marcas.push(`<span class="pastilla">F ${resultado.fisico.hechos}/${REGLAS.fisicosQueCuentan}</span>`);
       marcas.push(`<span class="pastilla${resultado.espiritual.faltantes.length ? ' aviso' : ' ok'}">E ${resultado.espiritual.hechos}/${REGLAS.espiritualesObligatorios}</span>`);
     }
@@ -222,9 +315,12 @@ function pintarFicha() {
 
   $$('#lista-escaneos .quitar').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('¿Quitar este escaneo de la ficha?')) return;
+    const antes = resultadoLocal(estado.club.id, estado.escaneos);
     await almacen.borrarEscaneo(estado.club.id, b.dataset.crudo);
-    await marcarPendiente(estado.club.id);
     await recargarEscaneos();
+    const despues = resultadoLocal(estado.club.id, estado.escaneos);
+    await marcarPendiente(estado.club.id, codigosQueCambiaron(antes, despues));
+    pintarFicha();
   }));
 
   const ficha = estado.fichas.get(estado.club.id);
@@ -280,6 +376,7 @@ async function procesarCodigo(texto) {
     return;
   }
 
+  const antes = resultadoLocal(estado.club.id, estado.escaneos);
   const guardado = await almacen.agregarEscaneo({
     idClub: estado.club.id,
     crudo: lectura.crudo,
@@ -294,7 +391,9 @@ async function procesarCodigo(texto) {
   }
 
   await recargarEscaneos();
-  await marcarPendiente(estado.club.id);
+  const despues = resultadoLocal(estado.club.id, estado.escaneos);
+  await marcarPendiente(estado.club.id, codigosQueCambiaron(antes, despues));
+  pintarFicha();
 
   // Buscamos como quedo ESTE escaneo dentro del resultado recalculado, para poder
   // avisar exactamente por que se conto o por que no.
@@ -364,7 +463,7 @@ function apagarCamara() {
 
 function pintarResultados() {
   const todos = resultadosDeTodos();
-  const conDatos = todos.filter(t => t.escaneos.length);
+  const conDatos = todos.filter(t => clubTienePuntaje(t.club.id, t.escaneos));
   const cerradas = todos.filter(t => t.ficha?.cerrada).length;
   const conAlertas = conDatos.filter(t => t.resultado.alertas.some(a => a.nivel === 'alerta')).length;
   const puntos = conDatos.reduce((t, x) => t + x.resultado.total, 0);
@@ -372,7 +471,7 @@ function pintarResultados() {
   const tarjeta = (valor, rotulo, clase = '') =>
     `<div class="marcador"><div class="valor ${clase}">${valor}</div><div class="rotulo">${rotulo}</div></div>`;
   $('#totales-generales').innerHTML =
-    tarjeta(`${conDatos.length}/${CLUBES.length}`, 'clubes con escaneos') +
+    tarjeta(`${conDatos.length}/${CLUBES_OFICIALES.length}`, 'clubes con escaneos') +
     tarjeta(cerradas, 'fichas terminadas') +
     tarjeta(conAlertas, 'clubes con alertas', conAlertas ? 'tenue' : '') +
     tarjeta(conDatos.length ? Math.round(puntos / conDatos.length) : 0, 'promedio de puntos');
@@ -383,7 +482,7 @@ function pintarResultados() {
     let marca = '<span class="tenue">sin evaluar</span>';
     if (graves) marca = `<span class="pastilla alerta">${graves} alerta${graves === 1 ? '' : 's'}</span>`;
     else if (ficha?.cerrada) marca = '<span class="pastilla ok">terminada</span>';
-    else if (escaneos.length) marca = '<span class="pastilla info">en curso</span>';
+    else if (clubTienePuntaje(club.id, escaneos)) marca = '<span class="pastilla info">en curso</span>';
     return `<tr>
       <td>${escapar(club.nombre)}</td>
       <td class="tenue">${escapar(club.region)}</td>
@@ -401,7 +500,7 @@ function pintarResultados() {
  * Arma las hojas del Excel y del envio a Google Sheets.
  *
  * `soloConEscaneos` importa cuando evalua mas de una persona: si un telefono manda
- * los 72 clubes, los que no evaluo irian con cero y pisarian en la planilla el
+ * todo el padrón, los que no evaluó irían con cero y pisarían en la planilla el
  * trabajo de otro. Mandando solo lo propio, cada uno actualiza su parte.
  *
  * La columna 0 de cada hoja lleva el ID del club a proposito: es la que usa el
@@ -458,7 +557,7 @@ function hojasParaExportar({ soloConEscaneos = false, idsClub = null } = {}) {
     ['Parámetro', 'Valor'],
     ['Campori', CAMPORI.nombre],
     ['Exportado', fecha],
-    ['Clubes en el padrón', CLUBES.length],
+    ['Clubes en el padrón', CLUBES_OFICIALES.length],
     ['Puntos por evento', TOPE_FISICO / REGLAS.fisicosQueCuentan],
     ['Eventos físicos que cuentan', `${REGLAS.fisicosQueCuentan} de 14 (valen los primeros escaneados)`],
     ['Máximo físico', TOPE_FISICO],
@@ -495,11 +594,21 @@ async function guardarSheets() {
 
 async function guardarPendientes() {
   await almacen.guardarAjuste('clubesPendientes', [...estado.pendientes]);
+  await almacen.guardarAjuste(
+    'eventosPendientes',
+    [...estado.eventosPendientes].map(([id, codigos]) => [id, [...codigos]])
+  );
 }
 
-async function marcarPendiente(idClub) {
-  if (!idClub) return;
+async function marcarPendiente(idClub, codigos = null) {
+  if (!idClub || idClub === CLUB_PRUEBA) return;
   estado.pendientes.add(idClub);
+  if (!estado.eventosPendientes.has(idClub)) estado.eventosPendientes.set(idClub, new Set());
+  const conjunto = estado.eventosPendientes.get(idClub);
+  const afectados = codigos == null ? TODOS_LOS_ITEMS.map(e => e.codigo) : codigos;
+  for (const codigo of afectados) {
+    if (TODOS_LOS_ITEMS.some(e => e.codigo === codigo)) conjunto.add(codigo);
+  }
   await guardarPendientes();
   programarSincronizacion();
 }
@@ -510,7 +619,7 @@ function programarSincronizacion() {
 }
 
 async function enviarClubes(idsClub, silencioso = false) {
-  const ids = [...new Set(idsClub || [])].filter(Boolean);
+  const ids = [...new Set(idsClub || [])].filter(id => id && id !== CLUB_PRUEBA);
   if (!ids.length) return { ok: true, hojas: [] };
   const url = $('#sheets-url').value.trim();
   const clave = $('#sheets-clave').value;
@@ -521,6 +630,29 @@ async function enviarClubes(idsClub, silencioso = false) {
   const nombres = resultadosDeTodos()
     .filter(t => ids.includes(t.club.id))
     .map(t => t.club.nombre);
+  const porClub = new Map(resultadosDeTodos().map(t => [t.club.id, t]));
+  const cambios = ids.map(idClub => {
+    const datosClub = porClub.get(idClub);
+    const locales = puntajesPorEvento(resultadoLocal(idClub, datosClub?.escaneos || []));
+    const remotos = estado.puntajesHoja.get(idClub)?.eventos || {};
+    const guardados = estado.eventosPendientes.get(idClub);
+    // Compatibilidad con pendientes creados por una versión anterior, que todavía
+    // no guardaba qué columnas había tocado.
+    const codigos = guardados ? [...guardados] : TODOS_LOS_ITEMS.map(e => e.codigo);
+    const eventos = {};
+    const anteriores = {};
+    for (const codigo of codigos) {
+      eventos[codigo] = Number(locales[codigo]) || 0;
+      anteriores[codigo] = Number(remotos[codigo]) || 0;
+    }
+    return {
+      idClub,
+      eventos,
+      anteriores,
+      estado: datosClub?.ficha?.cerrada ? 'Terminada'
+        : datosClub?.escaneos?.length ? 'En curso' : 'Sin evaluar',
+    };
+  });
 
   const r = await sheets.enviar(
     {
@@ -535,13 +667,33 @@ async function enviarClubes(idsClub, silencioso = false) {
       reemplazar: h.reemplazar,
       clubesReemplazar: h.clubesReemplazar,
     })),
-    CAMPORI.nombre
+    CAMPORI.nombre,
+    {
+      cambios,
+      padron: CLUBES_OFICIALES.map(({ id, nombre, region }) => ({ id, nombre, region })),
+      eventos: TODOS_LOS_ITEMS.map(({ codigo, nombre, tipo, puntos }) =>
+        ({ codigo, nombre, tipo, puntos })
+      ),
+    }
   );
 
-  if (r.ok) {
-    ids.forEach(id => estado.pendientes.delete(id));
+  const aplicados = Array.isArray(r.aplicados)
+    ? r.aplicados
+    : r.ok ? ids : [];
+  if (aplicados.length) {
+    aplicados.forEach(id => {
+      estado.pendientes.delete(id);
+      estado.eventosPendientes.delete(id);
+    });
     await guardarPendientes();
     if (!silencioso) mostrarEstadoSheets('ok', 'Cambios enviados. Actualizando desde la planilla…');
+  }
+  if (Array.isArray(r.conflictos) && r.conflictos.length && !silencioso) {
+    mostrarEstadoSheets(
+      'alerta',
+      `Se detectaron ${r.conflictos.length} cambio${r.conflictos.length === 1 ? '' : 's'} más reciente(s) ` +
+      'en la planilla. Refrescá y volvé a aplicar únicamente tu cambio.'
+    );
   }
   return r;
 }
@@ -558,6 +710,13 @@ async function aplicarEstadoRemoto(r) {
   await almacen.reemplazarEscaneos(escaneos, estado.pendientes);
   estado.todos = await almacen.todosLosEscaneos();
   if (estado.club) estado.escaneos = await almacen.escaneosDeClub(estado.club.id);
+  estado.versionSheets = Number(r.version) || 0;
+  if (Array.isArray(r.eventos) && Array.isArray(r.puntajes)) {
+    estado.eventosHoja = sheets.normalizarEventos(r.eventos);
+    estado.puntajesHoja = sheets.normalizarPuntajes(r.puntajes, estado.eventosHoja);
+    await almacen.guardarAjuste('eventosHoja', estado.eventosHoja);
+    await almacen.guardarAjuste('puntajesHoja', [...estado.puntajesHoja]);
+  }
 
   // Las claves vienen como texto QR; el motor trabaja con el id evento-serial.
   estado.remotos = new Map();
@@ -602,8 +761,10 @@ async function traerDeSheets(silencioso = false) {
     return aplicada;
   }
   if (!silencioso) {
-    mostrarEstadoSheets('ok', `Sincronizado: ${estado.todos.length} escaneos de ${r.clubes || 0} clubes. ` +
-      'Los cambios manuales de "Detalle de escaneos" ya están reflejados.');
+    const fuente = estado.versionSheets >= 2
+      ? `${estado.puntajesHoja.size} filas de puntajes y ${estado.todos.length} escaneos`
+      : `${estado.todos.length} escaneos de ${r.clubes || 0} clubes`;
+    mostrarEstadoSheets('ok', `Sincronizado: ${fuente}. Los valores actuales de Google Sheets ya están reflejados.`);
   }
   return r;
 }
@@ -702,12 +863,37 @@ async function conectarInicial() {
     await guardarPendientes();
   }
 
-  const remota = await traerDeSheets(true);
+  let remota = await traerDeSheets(true);
   if (!remota?.ok) {
     boton.disabled = false;
     boton.textContent = 'Conectar y sincronizar';
     mostrarEstadoConexion('alerta', remota?.error || 'No se pudo leer la planilla.');
     return;
+  }
+
+  // La API v2 puede preparar sola la matriz vacía/legada. Después de este paso,
+  // las columnas de eventos se descubren siempre leyendo el encabezado de Sheets.
+  if (estado.versionSheets >= 2 && !estado.eventosHoja.length) {
+    mostrarEstadoConexion('', 'Preparando clubes y columnas de eventos en Google Sheets…');
+    const preparadaHoja = await sheets.preparar(
+      url,
+      clave,
+      CLUBES_OFICIALES.map(({ id, nombre, region }) => ({ id, nombre, region })),
+      TODOS_LOS_ITEMS.map(({ codigo, nombre, tipo, puntos }) => ({ codigo, nombre, tipo, puntos }))
+    );
+    if (!preparadaHoja.ok) {
+      boton.disabled = false;
+      boton.textContent = 'Conectar y sincronizar';
+      mostrarEstadoConexion('alerta', preparadaHoja.error || 'No se pudo preparar la hoja Puntajes.');
+      return;
+    }
+    remota = await traerDeSheets(true);
+    if (!remota?.ok) {
+      boton.disabled = false;
+      boton.textContent = 'Conectar y sincronizar';
+      mostrarEstadoConexion('alerta', remota?.error || 'La hoja se preparó, pero no se pudo volver a leer.');
+      return;
+    }
   }
 
   if (estado.pendientes.size) {
@@ -741,7 +927,7 @@ async function pintarDiagnostico() {
       `Lector ${VERSION_LECTOR} · ${await Escaner.descripcionMotor()}`],
     [seguro ? '✅' : '❌', 'Contexto seguro (HTTPS)',
       seguro ? 'Sí, la cámara puede abrirse' : 'No. Sin HTTPS el navegador bloquea la cámara.'],
-    ['📋', 'Clubes en el padrón', String(CLUBES.length)],
+    ['📋', 'Clubes oficiales en el padrón', String(CLUBES_OFICIALES.length)],
     [estado.remotos.size ? '✅' : '⚠️', 'Stickers usados por otros clubes',
       estado.remotos.size
         ? `${estado.remotos.size}, traídos el ${new Date(estado.remotosFecha).toLocaleString('es-BO')}`
@@ -778,13 +964,24 @@ async function iniciar() {
 
   const pendientes = await almacen.leerAjuste('clubesPendientes', []);
   if (Array.isArray(pendientes)) estado.pendientes = new Set(pendientes);
+  const eventosPendientes = await almacen.leerAjuste('eventosPendientes', []);
+  if (Array.isArray(eventosPendientes)) {
+    estado.eventosPendientes = new Map(
+      eventosPendientes.map(([id, codigos]) => [id, new Set(Array.isArray(codigos) ? codigos : [])])
+    );
+  }
 
   const remotos = await almacen.leerAjuste('remotos', null);
   if (Array.isArray(remotos)) estado.remotos = new Map(remotos);
   estado.remotosFecha = await almacen.leerAjuste('remotosFecha', null);
+  const eventosHoja = await almacen.leerAjuste('eventosHoja', []);
+  if (Array.isArray(eventosHoja)) estado.eventosHoja = sheets.normalizarEventos(eventosHoja);
+  const puntajesHoja = await almacen.leerAjuste('puntajesHoja', []);
+  if (Array.isArray(puntajesHoja)) estado.puntajesHoja = new Map(puntajesHoja);
 
   $('#filtro-region').innerHTML = '<option value="">Todas las regiones</option>' +
-    [...new Set(CLUBES.map(c => c.region))].map(r => `<option>${escapar(r)}</option>`).join('');
+    [...new Set(CLUBES_OFICIALES.map(c => c.region))].filter(Boolean)
+      .map(r => `<option>${escapar(r)}</option>`).join('');
 
   $('#m-fisicos .valor').textContent = `0/${REGLAS.fisicosQueCuentan}`;
   $('#m-espirituales .valor').textContent = `0/${REGLAS.espiritualesObligatorios}`;
@@ -802,6 +999,12 @@ async function iniciar() {
   if (!window.isSecureContext) {
     $('#estado-cabecera').textContent =
       'Sin HTTPS: la cámara no va a poder abrirse. Ver el diagnóstico en Ajustes.';
+  }
+
+  // Una recarga de la página vuelve a leer Sheets automáticamente cuando este
+  // teléfono ya estaba configurado. No hacen falta websockets para ver lo último.
+  if ($('#sheets-url').value.trim() && $('#sheets-clave').value) {
+    await conectarInicial();
   }
 }
 
@@ -836,7 +1039,7 @@ $('#manual').addEventListener('click', () => {
 $('#cerrar-ficha').addEventListener('click', async () => {
   const ficha = estado.fichas.get(estado.club.id);
   await almacen.marcarFicha(estado.club.id, { cerrada: !ficha?.cerrada });
-  await marcarPendiente(estado.club.id);
+  await marcarPendiente(estado.club.id, []);
   estado.fichas = await almacen.fichas();
   pintarFicha();
   const ahoraCerrada = estado.fichas.get(estado.club.id)?.cerrada;
@@ -846,10 +1049,13 @@ $('#cerrar-ficha').addEventListener('click', async () => {
 });
 $('#borrar-ficha').addEventListener('click', async () => {
   if (!confirm(`¿Borrar TODOS los escaneos de ${estado.club.nombre}? No se puede deshacer.`)) return;
+  const antes = resultadoLocal(estado.club.id, estado.escaneos);
   await almacen.borrarClub(estado.club.id);
-  await marcarPendiente(estado.club.id);
   estado.fichas = await almacen.fichas();
   await recargarEscaneos();
+  const despues = resultadoLocal(estado.club.id, estado.escaneos);
+  await marcarPendiente(estado.club.id, codigosQueCambiaron(antes, despues));
+  pintarFicha();
   avisar('info', '🗑️', 'Ficha vaciada', 'Podés empezar de nuevo.');
 });
 
@@ -892,7 +1098,11 @@ $('#borrar-todo').addEventListener('click', async () => {
   const idsConDatos = [...new Set(estado.todos.map(e => e.idClub))];
   await almacen.borrarTodo();
   estado.todos = []; estado.fichas = new Map(); estado.escaneos = [];
-  for (const id of idsConDatos) estado.pendientes.add(id);
+  for (const id of idsConDatos) {
+    if (id === CLUB_PRUEBA) continue;
+    estado.pendientes.add(id);
+    estado.eventosPendientes.set(id, new Set(TODOS_LOS_ITEMS.map(e => e.codigo)));
+  }
   await guardarPendientes();
   programarSincronizacion();
   pintarClubes(); pintarDiagnostico();

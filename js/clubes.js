@@ -3,7 +3,7 @@
 // ARCHIVO GENERADO -- no lo edites a mano.
 // Fuente: "LISTAS GENERALES.xlsx", hoja "BASE DE DATOS".
 // Esa planilla tiene una fila por comprobante de pago (165 filas), no por club;
-// aca ya vienen deduplicados y con el nombre unificado: 71 clubes reales.
+// aca ya vienen deduplicados y con el nombre unificado: 74 clubes reales.
 //
 // No incluye el nombre de los directores a proposito: este archivo termina publicado
 // y son datos personales. El club se identifica igual con su nombre, region e iglesia.
@@ -82,7 +82,10 @@ export const CLUBES = [
   { id: 'C068', nombre: 'Excelsus Kids', region: 'Región 11', iglesia: 'Chicaloma', distrito: 'Irupana' },
   { id: 'C069', nombre: 'Obreritos de Irupana', region: 'Región 11', iglesia: 'Irupana', distrito: 'Irupana' },
   { id: 'C070', nombre: '+ Q VENCEDORES', region: 'Región 12', iglesia: 'Asunta Central', distrito: 'La Asunta "A"' },
+  { id: 'C072', nombre: 'Yungueñitos, Amigos de Jesus', region: 'Región 12', iglesia: '', distrito: 'Asunta C' },
   { id: 'C071', nombre: 'Yaguaras Jr', region: 'Región 13', iglesia: 'Sena', distrito: 'Amazonía' },
+  { id: 'C073', nombre: 'Tucanes', region: '', iglesia: '', distrito: '' },
+  { id: 'C074', nombre: 'Pregoneros', region: '', iglesia: '', distrito: '' },
   // Club de prueba. No participa del campori: sirve para ensayar la app sin ensuciar datos reales.
   { id: 'C999', nombre: 'ediquin', region: 'PRUEBA', iglesia: 'Club de prueba', distrito: 'Pruebas' },
 ];

@@ -15,7 +15,7 @@ aplicaciones. Son archivos HTML, CSS y JavaScript que el navegador abre tal cual
 | Físicos | 14 disponibles | 200 | Solo cuentan los **8 primeros escaneados** | **1600** |
 | Espirituales | 7 | 200 | Los 7 son **obligatorios** | **1400** |
 | **Puntaje base** | | | | **3000** |
-| Adicional | 35 eventos | 100 a 500 | Cada evento cuenta una vez y suma **aparte** del puntaje base | — |
+| Adicional | 36 eventos | 50 a 500 | Cada evento cuenta una vez y suma **aparte** del puntaje base | — |
 | Sanciones | 3 | −2000 / −500 | Restan del total; se pueden repetir (varios días) | — |
 
 Los físicos y espirituales suman 200; los adicionales suman lo que dice el catálogo
@@ -61,7 +61,7 @@ dependen de su código.
 
 Abrí `generador.html`:
 
-Elegí los eventos y cuántos QR necesitás por evento (80 alcanza: son 71 clubes). Las
+Elegí los eventos y cuántos QR necesitás por evento (80 alcanza: son 74 clubes). Las
 **sanciones vienen destildadas** a propósito: marcá solo las que vayas a usar, y pocas.
 
 Cada evento se imprime como un **bloque con su título encima de sus QR** (por ejemplo
@@ -102,7 +102,7 @@ Google Sheets es la vía compartida y la fuente central. Al abrir el evaluador a
 la pantalla **Conectar con Google Sheets**. Después de conectarse:
 
 1. Cada escaneo o eliminación se envía automáticamente.
-2. La aplicación revisa la planilla cada 20 segundos y al volver a primer plano.
+2. La aplicación revisa la planilla al recargar, cada 20 segundos y al volver a primer plano.
 3. Sin señal, los cambios quedan pendientes en el teléfono y se envían al reconectar.
 
 El detalle siempre se envía: es indispensable para detectar el mismo serial en dos
@@ -134,24 +134,26 @@ Preparación, una sola vez:
 5. Copiá la dirección que termina en `/exec` y pegala en la pantalla inicial de la
    aplicación, junto con la misma clave.
 
-Cada teléfono manda **solo los clubes que evaluó**, junto con el detalle completo de
-sus escaneos. En la planilla se fusionan por club: se reemplazan esas filas y se deja
-intacto todo lo demás. Por eso pueden mandar varios evaluadores sin pisarse y cada
-uno puede reenviar sin duplicar nada. La hoja `Envíos` deja constancia de quién mandó
-qué y cuándo.
+Cada teléfono manda **solo las celdas de eventos que modificó**, agrupadas por club,
+junto con el detalle de sus escaneos. El Apps Script aplica esos parches bajo bloqueo
+y compara el valor anterior de cada celda. Dos evaluadores que trabajan clubes
+distintos no se pisan; si intentan cambiar la misma celda desde un estado viejo, se
+devuelve un conflicto y la app obliga a refrescar. La hoja `Envíos` deja constancia
+de quién mandó qué y cuándo.
 
 La dirección y la clave se guardan **en el teléfono**, nunca en el repositorio. Quien
 tenga esa dirección puede escribir en tu planilla, así que no la publiques.
 
 #### Correcciones manuales en Google Sheets
 
-La hoja **Detalle de escaneos** es la fuente del puntaje. Si borrás allí la fila de
-un evento, o corregís su club o su código QR, el cambio aparece en los teléfonos en
-un máximo aproximado de 20 segundos. La aplicación recalcula el puntaje mostrado
-desde ese detalle.
+La hoja **Puntajes** es la fuente del número mostrado por la app. Tiene `ID`, `Club`,
+`Región`, una columna por cada código de evento y `TOTAL`. Corregí la celda del evento
+correspondiente y usá **0** cuando no fue realizado. El cambio aparece al recargar,
+al volver a la app o en un máximo aproximado de 20 segundos.
 
-No edites solamente el número de la columna TOTAL en la hoja **Puntajes**, porque es
-un resultado calculado y el próximo envío lo vuelve a generar desde el detalle.
+No cambies `ID` ni edites `TOTAL`: TOTAL es una fórmula. Si además hay que invalidar
+un sticker, borrá o corregí su fila en **Detalle de escaneos**, que sigue siendo la
+auditoría para detectar un mismo QR en dos clubes.
 
 Cuando un QR aparece en dos clubes, ambos quedan con ese sticker en conflicto y
 reciben 0 puntos. La decisión sobre el dueño legítimo se toma fuera de la app.

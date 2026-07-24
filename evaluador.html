@@ -135,9 +135,9 @@
   <div class="conexion-tarjeta">
     <h2>Conectar con Google Sheets</h2>
     <p class="chico tenue">
-      La planilla será la fuente central. Los cambios del teléfono se enviarán
-      automáticamente y las correcciones hechas en la hoja
-      <strong>Detalle de escaneos</strong> aparecerán en la aplicación.
+      La hoja <strong>Puntajes</strong> será la fuente central. Los cambios del
+      teléfono se enviarán automáticamente y, al recargar o volver a la app,
+      se mostrarán los valores más recientes de Google Sheets.
     </p>
     <label for="conexion-url">Dirección del Apps Script</label>
     <input type="url" id="conexion-url"
@@ -291,13 +291,15 @@
     <div class="panel">
       <h2>Sincronización con Google Sheets</h2>
       <p class="chico tenue" style="margin-top:-6px">
-        Cada cambio se envía automáticamente. La aplicación también revisa la planilla
-        cada 20 segundos para reflejar correcciones manuales.
+        Cada cambio se envía automáticamente por club y por celda de evento. La
+        aplicación relee la planilla al recargar, al volver a primer plano y cada
+        20 segundos.
       </p>
       <div class="aviso-caja">
-        Google Sheets es la fuente central. Para quitar un evento manualmente, borrá
-        su fila en <strong>Detalle de escaneos</strong>; el puntaje se recalculará y el
-        cambio aparecerá en los teléfonos. No edites únicamente el TOTAL de Puntajes.
+        Google Sheets es la fuente central. Corregí el valor en la columna del evento
+        correspondiente y usá <strong>0</strong> si no fue realizado. No cambies
+        <strong>ID</strong> ni <strong>TOTAL</strong>; TOTAL es una fórmula. Si además
+        se debe invalidar un sticker, quitá su fila de <strong>Detalle de escaneos</strong>.
       </div>
 
       <details style="margin-bottom:14px">
@@ -365,6 +367,6 @@
   <button data-vista="ajustes">Ajustes</button>
 </nav>
 
-<script type="module" src="js/evaluador.js?v=11"></script>
+<script type="module" src="js/evaluador.js?v=12"></script>
 </body>
 </html>

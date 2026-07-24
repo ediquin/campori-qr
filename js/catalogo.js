@@ -57,7 +57,8 @@ export const EVENTOS_ESPIRITUALES = [
   { codigo: 'E07', nombre: 'La Ley del Aventureros' },
 ];
 
-// Eventos adicionales oficiales. Todos valen 100 puntos y cuentan una sola vez.
+// Eventos adicionales oficiales. Cada uno toma su puntaje del catálogo y cuenta
+// una sola vez.
 export const CRITERIOS_ADICIONALES = [
   { codigo: 'A01', nombre: 'RFA VIERNES', puntos: 100 },
   { codigo: 'A02', nombre: 'CULTO GENERAL VIERNES MAÑANA', puntos: 100 },
@@ -103,6 +104,7 @@ export const CRITERIOS_ADICIONALES = [
   { codigo: 'A31', nombre: 'PLAZA DEL AVENTURERO', puntos: 200 },
   { codigo: 'A32', nombre: 'SEGURIDAD', puntos: 200 },
   { codigo: 'A33', nombre: 'LIMPIEZA KM4', puntos: 200 },
+  { codigo: 'A36', nombre: 'Puntos extra', puntos: 50 },
 ];
 
 // Sanciones: restan puntaje. Cada una tiene puntos negativos y su propio QR.

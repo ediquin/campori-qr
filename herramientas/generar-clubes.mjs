@@ -17,7 +17,7 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, '..');
@@ -77,7 +77,7 @@ function columnaAIndice(ref) {
   return n - 1;
 }
 
-function leerPrimeraHoja(archivo) {
+function leerHojas(archivo) {
   const zip = leerZip(archivo);
   const texto = nombre => {
     const b = zip.get(nombre);
@@ -101,29 +101,34 @@ function leerPrimeraHoja(archivo) {
   for (const m of texto('xl/_rels/workbook.xml.rels').matchAll(/Id="([^"]*)"[^>]*Target="([^"]*)"/g)) {
     rels[m[1]] = m[2];
   }
-  let destino = rels[hojas[0][2]];
-  destino = destino.startsWith('/') ? destino.slice(1) : 'xl/' + destino;
-
-  const xml = texto(destino);
-  const filas = [];
-  for (const fm of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
-    const celdas = [];
-    for (const cm of fm[1].matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)) {
-      const ref = (cm[1].match(/r="([A-Z]+\d+)"/) || [])[1];
-      if (!ref) continue;
-      const tipo = (cm[1].match(/t="([^"]*)"/) || [])[1];
-      const v = cm[2].match(/<v>([\s\S]*?)<\/v>/);
-      const inline = cm[2].match(/<is>([\s\S]*?)<\/is>/);
-      let valor = null;
-      if (tipo === 's' && v) valor = compartidas[Number(v[1])];
-      else if (tipo === 'inlineStr' && inline) {
-        valor = desescapar([...inline[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x => x[1]).join(''));
-      } else if (v) valor = desescapar(v[1]);
-      if (valor != null && String(valor).trim() !== '') celdas[columnaAIndice(ref)] = String(valor).trim();
+  return hojas.map(function (declarada) {
+    let destino = rels[declarada[2]];
+    destino = destino.startsWith('/') ? destino.slice(1) : 'xl/' + destino;
+    const xml = texto(destino);
+    const filas = [];
+    for (const fm of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+      const celdas = [];
+      // Las celdas vacías pueden venir como <c .../>. Si no se las reconoce de
+      // forma explícita, una expresión que busca </c> termina atribuyéndoles el
+      // contenido de la celda siguiente y desplaza columnas.
+      for (const cm of fm[1].matchAll(/<c([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const ref = (cm[1].match(/r="([A-Z]+\d+)"/) || [])[1];
+        if (!ref) continue;
+        const tipo = (cm[1].match(/t="([^"]*)"/) || [])[1];
+        const contenido = cm[2] || '';
+        const v = contenido.match(/<v>([\s\S]*?)<\/v>/);
+        const inline = contenido.match(/<is>([\s\S]*?)<\/is>/);
+        let valor = null;
+        if (tipo === 's' && v) valor = compartidas[Number(v[1])];
+        else if (tipo === 'inlineStr' && inline) {
+          valor = desescapar([...inline[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x => x[1]).join(''));
+        } else if (v) valor = desescapar(v[1]);
+        if (valor != null && String(valor).trim() !== '') celdas[columnaAIndice(ref)] = String(valor).trim();
+      }
+      if (celdas.some(Boolean)) filas.push(celdas);
     }
-    if (celdas.some(Boolean)) filas.push(celdas);
-  }
-  return { hoja: hojas[0][1], filas };
+    return { hoja: desescapar(declarada[1]), filas };
+  });
 }
 
 // ---------------------------------------------------------------- normalizacion
@@ -132,7 +137,7 @@ function leerPrimeraHoja(archivo) {
 // Con esto "Messenger", "MESSENGER" y "Ch'itis Eternal Cam" colapsan como corresponde.
 export function claveClub(s) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/['´`._-]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+    .replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
 // De todas las formas en que se escribio un dato, elegimos la mas presentable.
@@ -162,7 +167,8 @@ const numeroRegion = r => parseInt(String(r).replace(/\D/g, ''), 10) || 99;
 
 // ---------------------------------------------------------------- programa
 
-const { hoja, filas } = leerPrimeraHoja(XLSX);
+const hojasLibro = leerHojas(XLSX);
+const { hoja, filas } = hojasLibro[0];
 const encabezado = filas[0].map(c => (c || '').replace(/\s+/g, ' ').trim().toLowerCase());
 const col = frag => encabezado.findIndex(h => h.includes(frag));
 
@@ -197,7 +203,7 @@ if (conflictos.length) {
   }
 }
 
-const clubes = [...agrupados.entries()].map(([, e]) => ({
+const clubesBase = [...agrupados.entries()].map(([, e]) => ({
   nombre: mejorVariante(e.nombres),
   region: mejorRegion(e.regiones),
   iglesia: e.iglesias.length ? mejorVariante(e.iglesias) : '',
@@ -205,8 +211,82 @@ const clubes = [...agrupados.entries()].map(([, e]) => ({
   director: e.directores.length ? mejorVariante(e.directores) : '',
 }));
 
+// La pestaña "LISTA GRAL. DE CLUBES" es el padrón oficial. BASE DE DATOS aporta
+// iglesia/distrito, pero puede no tener pagos para todos los clubes confirmados.
+const hojaLista = hojasLibro.find(h => claveClub(h.hoja).includes('LISTA GRAL DE CLUBES'));
+let clubes = clubesBase;
+if (hojaLista) {
+  const porClaveBase = new Map(clubesBase.map(c => [claveClub(c.nombre), c]));
+  const filaEncabezado = hojaLista.filas.findIndex(f =>
+    f.some(c => claveClub(String(c || '')).includes('NOMBRES DE CLUBES'))
+  );
+  let regionActual = '';
+  const padronOficial = [];
+  for (const fila of hojaLista.filas.slice(filaEncabezado + 1)) {
+    const numero = Number(fila[0]);
+    const nombre = String(fila[2] || '').trim();
+    if (!Number.isInteger(numero) || !nombre) continue;
+    if (fila[1]) {
+      const nRegion = parseInt(String(fila[1]).replace(/\D/g, ''), 10);
+      regionActual = nRegion ? `Región ${nRegion}` : String(fila[1]).trim();
+    }
+    const base = porClaveBase.get(claveClub(nombre));
+    padronOficial.push(base
+      ? { ...base, region: regionActual || base.region }
+      : { nombre, region: regionActual, iglesia: '', distrito: '', director: '' }
+    );
+  }
+  if (padronOficial.length) clubes = padronOficial;
+}
+
 clubes.sort((a, b) => (numeroRegion(a.region) - numeroRegion(b.region)) || a.nombre.localeCompare(b.nombre, 'es'));
-clubes.forEach((c, i) => { c.id = 'C' + String(i + 1).padStart(3, '0'); });
+
+// Los QR de C001-C071 ya fueron entregados: regenerar desde una lista corregida no
+// puede desplazar esos ID. Recuperamos el mapeo previo solo para clubes oficiales
+// con región; las altas nuevas reciben el primer número libre.
+const idsPrevios = new Map();
+if (fs.existsSync(SALIDA)) {
+  const moduloPrevio = await import(pathToFileURL(SALIDA).href + '?v=' + Date.now());
+  for (const club of moduloPrevio.CLUBES || []) {
+    if (club.id !== 'C999' && club.region) idsPrevios.set(claveClub(club.nombre), club.id);
+  }
+}
+// Recuperación para un archivo generado incompleto: el primer padrón publicado se
+// numeró ordenando los 71 clubes de BASE DE DATOS por región y nombre.
+if (idsPrevios.size < clubesBase.length) {
+  idsPrevios.clear();
+  [...clubesBase]
+    .sort((a, b) => (numeroRegion(a.region) - numeroRegion(b.region)) || a.nombre.localeCompare(b.nombre, 'es'))
+    .forEach((club, i) => idsPrevios.set(claveClub(club.nombre), 'C' + String(i + 1).padStart(3, '0')));
+}
+const idsUsados = new Set();
+for (const club of clubes) {
+  const previo = idsPrevios.get(claveClub(club.nombre));
+  if (previo && !idsUsados.has(previo)) {
+    club.id = previo;
+    idsUsados.add(previo);
+  }
+}
+const siguienteId = () => {
+  let numero = 1;
+  while (idsUsados.has('C' + String(numero).padStart(3, '0'))) numero++;
+  const id = 'C' + String(numero).padStart(3, '0');
+  idsUsados.add(id);
+  return id;
+};
+clubes.forEach(c => { if (!c.id) c.id = siguienteId(); });
+
+// Altas confirmadas después de cerrar la planilla de inscripciones. Se agregan al
+// final para conservar para siempre los ID C001-C071 que ya fueron impresos en QR.
+// La región, iglesia y distrito quedan vacíos hasta que organización los complete.
+const clubesExtra = [
+  { nombre: 'Tucanes', region: '', iglesia: '', distrito: '', director: '' },
+  { nombre: 'Pregoneros', region: '', iglesia: '', distrito: '', director: '' },
+];
+for (const extra of clubesExtra) {
+  extra.id = siguienteId();
+  clubes.push(extra);
+}
 
 const esc = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 const cuerpo = clubes.map(c => {

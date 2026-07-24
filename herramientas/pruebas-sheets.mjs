@@ -13,7 +13,8 @@
 
 import {
   URL_PREDETERMINADA, migrarUrlPredeterminada,
-  normalizarSeriales, normalizarEscaneos, conflictosRemotosParaClub,
+  normalizarSeriales, normalizarEscaneos, normalizarEventos, normalizarPuntajes,
+  conflictosRemotosParaClub,
 } from '../js/sheets.js';
 
 let pasadas = 0;
@@ -183,6 +184,74 @@ grupo('Sincronizacion bidireccional');
   });
   comprobar('borrar la ultima fila de un club tambien se sincroniza',
     corregida, [['ID', 'Código QR'], ['C002', 'F02-BBBBBBBB']]);
+}
+
+grupo('Matriz de puntajes por evento');
+
+{
+  const eventos = normalizarEventos([
+    { codigo: ' f01 ', nombre: 'Aventu acampante', columna: 4 },
+    { codigo: 'E01', nombre: 'Biblia', columna: 18 },
+    { codigo: 'F01', nombre: 'Duplicado', columna: 99 },
+    { codigo: 'TOTAL', nombre: 'No es evento' },
+  ]);
+  comprobar('reconoce los eventos por código y deduplica',
+    eventos.map(e => e.codigo), ['F01', 'E01']);
+
+  const puntajes = normalizarPuntajes([
+    { idClub: 'C001', eventos: { F01: 200, E01: '', A99: 500 }, total: 200, revision: 3 },
+    { idClub: '', eventos: { F01: 999 } },
+  ], eventos);
+  comprobar('cero es el valor por defecto de una celda de evento',
+    puntajes.get('C001').eventos, { F01: 200, E01: 0 });
+  comprobar('conserva revisión y total de la fila',
+    [puntajes.get('C001').total, puntajes.get('C001').revision], [200, 3]);
+}
+
+/**
+ * Regla equivalente a aplicarCambiosPuntajes() de Apps Script, reducida a un
+ * objeto en memoria para comprobar la concurrencia por celda.
+ */
+function aplicarParches(matriz, cambios) {
+  const resultado = structuredClone(matriz);
+  const aplicados = [];
+  const conflictos = [];
+  for (const cambio of cambios) {
+    const fila = resultado[cambio.idClub];
+    if (!fila) { conflictos.push({ idClub: cambio.idClub }); continue; }
+    const malos = Object.keys(cambio.eventos).filter(codigo =>
+      Number(fila[codigo] || 0) !== Number(cambio.anteriores[codigo] || 0)
+    );
+    if (malos.length) {
+      conflictos.push(...malos.map(codigo => ({ idClub: cambio.idClub, codigo })));
+      continue;
+    }
+    Object.assign(fila, cambio.eventos);
+    aplicados.push(cambio.idClub);
+  }
+  return { matriz: resultado, aplicados, conflictos };
+}
+
+{
+  const inicial = {
+    C001: { F01: 0, F02: 0 },
+    C002: { F01: 0, F02: 0 },
+  };
+  const a = { idClub: 'C001', eventos: { F01: 200 }, anteriores: { F01: 0 } };
+  const b = { idClub: 'C002', eventos: { F02: 200 }, anteriores: { F02: 0 } };
+  const distintos = aplicarParches(inicial, [a, b]);
+  comprobar('dos teléfonos actualizan clubes distintos sin pisarse',
+    distintos.matriz, { C001: { F01: 200, F02: 0 }, C002: { F01: 0, F02: 200 } });
+
+  const c = { idClub: 'C001', eventos: { F02: 200 }, anteriores: { F02: 0 } };
+  const mismoClub = aplicarParches(aplicarParches(inicial, [a]).matriz, [c]);
+  comprobar('dos teléfonos actualizan eventos distintos del mismo club',
+    mismoClub.matriz.C001, { F01: 200, F02: 200 });
+
+  const choque = { idClub: 'C001', eventos: { F01: 100 }, anteriores: { F01: 0 } };
+  const enConflicto = aplicarParches(aplicarParches(inicial, [a]).matriz, [choque]);
+  comprobar('la misma celda desactualizada se rechaza',
+    [enConflicto.matriz.C001.F01, enConflicto.conflictos.length], [200, 1]);
 }
 
 {

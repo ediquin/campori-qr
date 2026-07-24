@@ -111,7 +111,7 @@ function hojaXml({ filas, anchos }) {
   const cuerpo = filas.map((fila, i) =>
     `<row r="${i + 1}">${fila.map((v, j) => celda(v, i + 1, j, i === 0)).join('')}</row>`
   ).join('');
-  // La fila 1 queda congelada para poder recorrer 71 clubes sin perder los titulos.
+  // La fila 1 queda congelada para recorrer todo el padrón sin perder los títulos.
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>

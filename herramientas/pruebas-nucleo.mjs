@@ -13,6 +13,7 @@ import {
 import { firmar, armarSticker, armarQrClub, leerQr } from '../js/codigo.js';
 import { calcular } from '../js/puntaje.js';
 import { crearIdentificador } from '../js/identificador.js';
+import { CLUBES, CLUB_PRUEBA, buscarClub } from '../js/clubes.js';
 
 let pasadas = 0;
 const fallos = [];
@@ -34,6 +35,17 @@ const sticker = (codigo, puntos = PUNTOS_EVENTO, serial = ++siguienteSerial) =>
 // ============================================================ firma de los QR
 
 grupo('Firma y formato de los codigos QR');
+
+{
+  const oficiales = CLUBES.filter(c => c.id !== CLUB_PRUEBA);
+  comprobar('hay 74 clubes oficiales más uno de prueba', [oficiales.length, CLUBES.length], [74, 75]);
+  comprobar('los IDs ya impresos no se renumeran',
+    [buscarClub('C070').nombre, buscarClub('C071').nombre],
+    ['+ Q VENCEDORES', 'Yaguaras Jr']);
+  comprobar('las tres altas quedan al final del rango oficial',
+    [buscarClub('C072').nombre, buscarClub('C073').nombre, buscarClub('C074').nombre],
+    ['Yungueñitos, Amigos de Jesus', 'Tucanes', 'Pregoneros']);
+}
 
 {
   // La firma propia tiene que coincidir con HMAC-SHA256 del modulo crypto de node.
@@ -202,7 +214,7 @@ grupo('Puntaje adicional');
 }
 
 {
-  comprobar('hay 35 eventos adicionales', CRITERIOS_ADICIONALES.length, 35);
+  comprobar('hay 36 eventos adicionales', CRITERIOS_ADICIONALES.length, 36);
   comprobar('los adicionales A01-A29 valen 100 puntos',
     CRITERIOS_ADICIONALES.slice(0, 29).every(evento => evento.puntos === 100), true);
 
@@ -214,10 +226,12 @@ grupo('Puntaje adicional');
     ['botiquin', 'botiquin', 'botiquin']);
   comprobar('Plaza/Seguridad/Limpieza valen 200',
     [porCod.A31.puntos, porCod.A32.puntos, porCod.A33.puntos], [200, 200, 200]);
+  comprobar('Puntos extra (A36) vale 50', porCod.A36.puntos, 50);
 
   // Un adicional de 500 lee su puntaje del catalogo, no el fijo de 200.
   comprobar('Botiquin y Personal (A30) suma 500', calcular([sticker('A30')]).adicional.puntos, 500);
   comprobar('Plaza (A31) suma 200', calcular([sticker('A31')]).adicional.puntos, 200);
+  comprobar('Puntos extra (A36) suma 50', calcular([sticker('A36')]).adicional.puntos, 50);
 }
 
 grupo('Rúbrica de Botiquín: mutuamente excluyente');

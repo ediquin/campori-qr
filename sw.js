@@ -7,7 +7,7 @@
 // seria mas rapido, pero durante el armado del sistema conviene que cada recarga traiga
 // la version nueva sin tener que andar limpiando cache a mano.
 
-const CACHE = 'campori-qr-v27';
+const CACHE = 'campori-qr-v29';
 
 const ARCHIVOS = [
   './',
@@ -37,6 +37,7 @@ const ARCHIVOS = [
   './js/generador.js?v=7',
   './js/generador.js?v=8',
   './js/generador.js?v=9',
+  './js/generador.js?v=10',
   './js/pdf-stickers.js',
   './js/pdf-stickers.js?v=2',
   './js/pdf-stickers.js?v=3',
@@ -46,6 +47,7 @@ const ARCHIVOS = [
   './js/evaluador.js?v=9',
   './js/evaluador.js?v=10',
   './js/evaluador.js?v=11',
+  './js/evaluador.js?v=12',
   './js/kit-prueba.js',
   './js/kit-prueba.js?v=7',
   './js/escaner.js',
@@ -54,6 +56,7 @@ const ARCHIVOS = [
   './js/exportar.js',
   './js/sheets.js',
   './js/sheets.js?v=2',
+  './js/sheets.js?v=3',
 ];
 
 self.addEventListener('install', evento => {

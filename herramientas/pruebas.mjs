@@ -18,6 +18,7 @@ const SUITES = [
   ['Exportacion a Excel', 'pruebas-exportar.mjs'],
   ['Descarga PDF de hojas de stickers', 'pruebas-pdf.mjs'],
   ['Fusion de envios a Google Sheets', 'pruebas-sheets.mjs'],
+  ['Apps Script: matriz y concurrencia real', 'pruebas-apps-script.mjs'],
   ['Escenario completo sobre el club de prueba', 'pruebas-escenario.mjs'],
 ];
 

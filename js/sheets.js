@@ -33,7 +33,12 @@ export function migrarUrlPredeterminada(url = '') {
  * @param {Array<{nombre: string, filas: Array<Array>}>} hojas
  * @returns {Promise<{ok: boolean, hojas?: string[], error?: string}>}
  */
-export async function enviar({ url, clave, dispositivo = '', clubes = '' }, hojas, campori = '') {
+export async function enviar(
+  { url, clave, dispositivo = '', clubes = '' },
+  hojas,
+  campori = '',
+  { cambios = [], padron = [], eventos = [] } = {}
+) {
   if (!url) return { ok: false, error: 'Falta la dirección del script' };
   if (!/^https:\/\/script\.google\.com\/.*\/exec$/.test(url.trim())) {
     return {
@@ -47,6 +52,9 @@ export async function enviar({ url, clave, dispositivo = '', clubes = '' }, hoja
     clave, campori, dispositivo, clubes,
     enviado: new Date().toISOString(),
     hojas,
+    cambios,
+    padron,
+    eventos,
   });
 
   try {
@@ -83,6 +91,19 @@ export async function enviar({ url, clave, dispositivo = '', clubes = '' }, hoja
       error: `No se pudo conectar (${e.message}). Revisá que haya internet y que la dirección sea la correcta.`,
     };
   }
+}
+
+/**
+ * Prepara la matriz de puntajes en un Apps Script v2. La llamada es idempotente:
+ * conserva los valores existentes por ID y código de evento.
+ */
+export async function preparar(url, clave, padron = [], eventos = []) {
+  return enviar(
+    { url, clave },
+    [],
+    '',
+    { cambios: [], padron, eventos }
+  );
 }
 
 /**
@@ -158,6 +179,50 @@ export function normalizarEscaneos(escaneos = []) {
     });
   }
   return [...unicos.values()].sort((a, b) => a.ts - b.ts);
+}
+
+/** Catálogo que el Apps Script detectó en las columnas de la hoja Puntajes. */
+export function normalizarEventos(eventos = []) {
+  const unicos = new Map();
+  for (const fila of Array.isArray(eventos) ? eventos : []) {
+    const codigo = String(fila?.codigo || '').trim().toUpperCase();
+    if (!/^[A-Z][0-9]{2}$/.test(codigo)) continue;
+    unicos.set(codigo, {
+      codigo,
+      nombre: String(fila?.nombre || codigo).trim() || codigo,
+      columna: Number(fila?.columna) || 0,
+    });
+  }
+  return [...unicos.values()];
+}
+
+/**
+ * Normaliza la matriz de puntajes remota a Map<ID, fila>. Cero es un valor real:
+ * significa que el club todavía no realizó ese evento.
+ */
+export function normalizarPuntajes(filas = [], eventos = []) {
+  const codigos = new Set(normalizarEventos(eventos).map(e => e.codigo));
+  const mapa = new Map();
+  for (const fila of Array.isArray(filas) ? filas : []) {
+    const idClub = String(fila?.idClub || '').trim();
+    if (!idClub) continue;
+    const valores = {};
+    for (const codigo of codigos) {
+      const n = Number(fila?.eventos?.[codigo]);
+      valores[codigo] = Number.isFinite(n) ? n : 0;
+    }
+    mapa.set(idClub, {
+      idClub,
+      club: String(fila?.club || '').trim(),
+      region: String(fila?.region || '').trim(),
+      eventos: valores,
+      total: Number.isFinite(Number(fila?.total)) ? Number(fila.total) : 0,
+      revision: Number.isFinite(Number(fila?.revision)) ? Number(fila.revision) : 0,
+      actualizado: String(fila?.actualizado || ''),
+      evaluador: String(fila?.evaluador || ''),
+    });
+  }
+  return mapa;
 }
 
 /**

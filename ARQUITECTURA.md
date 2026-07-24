@@ -12,7 +12,8 @@ objetivo es dar feedback.
 
 ## 1. Qué problema resuelve
 
-Un campori de aventureros con **71 clubes**. Cada club recorre estaciones de juegos;
+Un campori de aventureros con **74 clubes oficiales** y un club separado de prueba.
+Cada club recorre estaciones de juegos;
 al completar una, el juez le entrega un sticker con código QR que el club pega en su
 ficha de papel. Al final, un equipo de evaluadores escanea esas fichas con el celular
 y el sistema arma el puntaje.
@@ -24,7 +25,7 @@ Reglas del puntaje:
 | Físicos | 14 disponibles | 200 | Cuentan los **8 primeros escaneados** | 1600 |
 | Espirituales | 7 | 200 | Los 7 son obligatorios | 1400 |
 | **Base** | | | | **3000** |
-| Adicional | 35 eventos | 100 / 200 / 250 / 450 / 500 | Cada evento cuenta una vez, fuera del tope base | — |
+| Adicional | 36 eventos | 50 / 100 / 200 / 250 / 450 / 500 | Cada evento cuenta una vez, fuera del tope base | — |
 | Sanciones | 3 | −2000 / −500 | Restan del total; se pueden repetir (varios días) | — |
 
 Los eventos físicos y espirituales valen 200. Los adicionales valen lo que dice el
@@ -215,9 +216,11 @@ otro club.
 `LISTAS GENERALES.xlsx` con
 [`herramientas/generar-clubes.mjs`](herramientas/generar-clubes.mjs).
 
-Ese Excel es la planilla de pagos: **una fila por comprobante, no por club**. 165
-filas → 71 clubes reales. El script deduplica normalizando (sin tildes, sin
-puntuación, mayúsculas) y elige la variante mejor escrita de cada nombre.
+Ese Excel contiene la planilla de pagos y la pestaña **LISTA GRAL. DE CLUBES**. La
+lista general fija los 72 clubes originales; la base de pagos aporta iglesia y
+distrito. El generador deduplica la base, conserva los ID `C001`–`C071` ya impresos,
+incorpora `C072` Yungueñitos y agrega `C073` Tucanes y `C074` Pregoneros. `C999`
+queda exclusivamente para pruebas.
 
 Trampas reales que tiene ese archivo y que el script maneja:
 
@@ -229,7 +232,7 @@ Trampas reales que tiene ese archivo y que el script maneja:
 - Filas de basura al final (totales sueltos, números sin club).
 
 **No incluye nombres de directores.** El repositorio es público y son datos
-personales de 71 personas. La app no los necesita: el club se identifica con nombre,
+personales. La app no los necesita: el club se identifica con nombre,
 región e iglesia. Se pueden incluir con `--con-directores` si el despliegue es
 privado.
 

@@ -135,7 +135,7 @@ async function generarStickers() {
   const gruposPdf = [];
   for (const codigo of codigos) {
     const evento = buscarEvento(codigo);
-    // Adicionales y sanciones toman su puntaje del catalogo (100/200/500 o negativo);
+    // Adicionales y sanciones toman su puntaje del catálogo (50 a 500 o negativo);
     // fisicos y espirituales valen siempre PUNTOS_EVENTO.
     const puntos = (evento.tipo === 'adicional' || evento.tipo === 'sancion')
       ? evento.puntos
