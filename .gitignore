@@ -1,0 +1,17 @@
+# El Excel original de inscripciones queda FUERA del repositorio a proposito:
+# tiene nombres, telefonos y comprobantes de pago. El padron ya viene generado
+# y sin datos personales en js/clubes.js.
+LISTAS GENERALES.xlsx
+*.xlsx
+
+# Inventarios de seriales: son de cada impresion, no del proyecto.
+# Guardalos aparte, en un lugar seguro. Sin ellos no se detectan stickers falsos.
+inventario*.json
+datos-campori-*.json
+puntajes-campori-*.*
+
+# Basura del sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+node_modules/

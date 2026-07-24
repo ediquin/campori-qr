@@ -1,0 +1,156 @@
+/* Estilos compartidos por el generador y la app evaluadora.
+   La paleta acompaña el tema espacial del campori "De vuelta a casa".
+   Todo lo que se imprime va aparte, en negro sobre blanco (ver @media print). */
+
+:root {
+  --fondo: #0b1020;
+  --fondo-2: #141b33;
+  --panel: #1b2342;
+  --borde: #2c375e;
+  --texto: #eef2ff;
+  --tenue: #9aa6cc;
+  --acento: #ffb43f;
+  --acento-2: #6ea8ff;
+  --ok: #3ecf8e;
+  --aviso: #ffb43f;
+  --alerta: #ff5d6c;
+  --radio: 12px;
+  --sombra: 0 6px 24px rgba(0, 0, 0, .35);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, #24306040, transparent),
+    radial-gradient(900px 500px at 10% 110%, #3a2a6040, transparent),
+    var(--fondo);
+  color: var(--texto);
+  min-height: 100vh;
+  -webkit-text-size-adjust: 100%;
+}
+
+header.principal {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--borde);
+  background: #0b1020cc;
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+header.principal h1 { margin: 0; font-size: 1.15rem; letter-spacing: .2px; }
+header.principal p { margin: 4px 0 0; color: var(--tenue); font-size: .85rem; }
+
+main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: var(--sombra);
+}
+
+.panel h2 { margin: 0 0 14px; font-size: 1rem; color: var(--acento); }
+.panel h3 { margin: 18px 0 8px; font-size: .9rem; color: var(--acento-2); }
+
+label { display: block; font-size: .82rem; color: var(--tenue); margin-bottom: 5px; }
+
+input, select, button, textarea {
+  font: inherit;
+  border-radius: 9px;
+  border: 1px solid var(--borde);
+  background: var(--fondo-2);
+  color: var(--texto);
+  padding: 10px 12px;
+}
+
+input:focus, select:focus, button:focus-visible {
+  outline: 2px solid var(--acento-2);
+  outline-offset: 1px;
+}
+
+button {
+  cursor: pointer;
+  background: linear-gradient(180deg, #2b3765, #222c52);
+  border-color: #3a4778;
+  font-weight: 600;
+  transition: filter .15s;
+}
+button:hover { filter: brightness(1.15); }
+button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+
+button.principal {
+  background: linear-gradient(180deg, var(--acento), #e89a24);
+  border-color: #c9821b;
+  color: #2a1a00;
+}
+button.peligro { background: linear-gradient(180deg, #6d2230, #571a26); border-color: #8a2c3d; }
+
+.fila { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.fila > * { flex: 1 1 180px; min-width: 0; }
+.fila > .angosto { flex: 0 0 130px; }
+
+.rejilla { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+
+.pastilla {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px;
+  font-size: .75rem; font-weight: 600;
+  background: #ffffff14; border: 1px solid var(--borde);
+}
+.pastilla.ok { background: #3ecf8e22; border-color: #3ecf8e66; color: var(--ok); }
+.pastilla.aviso { background: #ffb43f22; border-color: #ffb43f66; color: var(--aviso); }
+.pastilla.alerta { background: #ff5d6c22; border-color: #ff5d6c66; color: var(--alerta); }
+.pastilla.info { background: #6ea8ff22; border-color: #6ea8ff66; color: var(--acento-2); }
+
+.aviso-caja {
+  border-left: 3px solid var(--aviso);
+  background: #ffb43f14;
+  padding: 10px 12px; border-radius: 0 9px 9px 0;
+  font-size: .85rem; margin: 8px 0;
+}
+.aviso-caja.alerta { border-color: var(--alerta); background: #ff5d6c14; }
+.aviso-caja.ok { border-color: var(--ok); background: #3ecf8e14; }
+
+table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--borde); }
+th { color: var(--tenue); font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; }
+tbody tr:hover { background: #ffffff08; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.tenue { color: var(--tenue); }
+.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.chico { font-size: .78rem; }
+
+/* ------------------------------------------------------------------ impresion */
+
+/* Las hojas se ven en pantalla como una vista previa en papel, y al imprimir
+   quedan tal cual, sin la interfaz alrededor. */
+.hoja {
+  background: #fff;
+  color: #000;
+  width: 194mm;
+  min-height: 281mm;
+  margin: 0 auto 16px;
+  padding: 0;
+  box-shadow: var(--sombra);
+  page-break-after: always;
+  break-after: page;
+}
+.hoja:last-child { page-break-after: auto; break-after: auto; }
+
+@media print {
+  /* Fuera todo lo de pantalla: lo impreso va en negro sobre blanco, que es lo
+     unico que un lector de QR agradece. */
+  body { background: #fff; color: #000; }
+  header.principal, .no-imprimir { display: none !important; }
+  main { padding: 0; max-width: none; }
+  .hoja { box-shadow: none; margin: 0; width: auto; min-height: 0; }
+  @page { size: A4; margin: 8mm; }
+}

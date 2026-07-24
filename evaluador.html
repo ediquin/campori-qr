@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>Evaluador — Campori de Aventureros</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/estilo.css">
+<style>
+  main { padding-bottom: 90px; }
+
+  /* --------------------------------------------------------- navegacion */
+  nav.pestanas {
+    display: flex; gap: 4px; padding: 8px;
+    background: #0b1020ee; border-top: 1px solid var(--borde);
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    backdrop-filter: blur(8px);
+  }
+  nav.pestanas button {
+    flex: 1; padding: 11px 6px; font-size: .78rem; font-weight: 600;
+    background: transparent; border: 1px solid transparent; color: var(--tenue);
+  }
+  nav.pestanas button[aria-current="true"] {
+    background: var(--panel); border-color: var(--borde); color: var(--acento);
+  }
+
+  .vista { display: none; }
+  .vista.activa { display: block; }
+
+  /* --------------------------------------------------------- lista de clubes */
+  .buscador { position: sticky; top: 0; z-index: 15; padding: 12px 0; background: var(--fondo); }
+  .buscador input, .buscador select { width: 100%; }
+
+  .tarjeta-club {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    padding: 12px 14px; margin-bottom: 8px;
+    background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio);
+    color: var(--texto); font-weight: 400;
+  }
+  .tarjeta-club:hover { border-color: var(--acento-2); }
+  .tarjeta-club .cuerpo { flex: 1 1 auto; min-width: 0; }
+  .tarjeta-club .nombre { font-weight: 600; font-size: .95rem; }
+  .tarjeta-club .meta { color: var(--tenue); font-size: .75rem; margin-top: 2px; }
+  .tarjeta-club .marcas { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .tarjeta-club .total {
+    flex: 0 0 auto; text-align: right;
+    font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .tarjeta-club .total small { display: block; font-size: .62rem; font-weight: 500; color: var(--tenue); }
+
+  /* --------------------------------------------------------- escaneo */
+  .marco-camara {
+    position: relative; background: #000; border-radius: var(--radio);
+    overflow: hidden; aspect-ratio: 4/3; margin-bottom: 12px;
+  }
+  .marco-camara video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .marco-camara .mira {
+    position: absolute; inset: 18%; border: 2px solid #ffffff66; border-radius: 10px;
+    box-shadow: 0 0 0 100vmax #00000055; pointer-events: none;
+  }
+  .marco-camara .apagada {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px; padding: 20px; text-align: center;
+    color: var(--tenue); font-size: .85rem;
+  }
+
+  #resultado-escaneo {
+    padding: 14px 16px; border-radius: var(--radio); margin-bottom: 12px;
+    border: 1px solid var(--borde); background: var(--panel);
+    display: flex; align-items: center; gap: 12px; min-height: 68px;
+  }
+  #resultado-escaneo .icono { font-size: 1.7rem; flex: 0 0 auto; line-height: 1; }
+  #resultado-escaneo .titulo { font-weight: 700; font-size: .95rem; }
+  #resultado-escaneo .sub { font-size: .8rem; color: var(--tenue); margin-top: 2px; }
+  #resultado-escaneo.ok { border-color: #3ecf8e88; background: #3ecf8e1a; }
+  #resultado-escaneo.aviso { border-color: #ffb43f88; background: #ffb43f1a; }
+  #resultado-escaneo.alerta { border-color: #ff5d6c88; background: #ff5d6c1a; }
+  #resultado-escaneo.info { border-color: #6ea8ff88; background: #6ea8ff1a; }
+
+  .marcadores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .marcador {
+    background: var(--panel); border: 1px solid var(--borde);
+    border-radius: 10px; padding: 10px 8px; text-align: center;
+  }
+  .marcador .valor { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .marcador .rotulo { font-size: .62rem; color: var(--tenue); text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
+  .marcador.completo .valor { color: var(--ok); }
+  .marcador.falta .valor { color: var(--aviso); }
+
+  .linea-escaneo {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-bottom: 1px solid var(--borde); font-size: .82rem;
+  }
+  .linea-escaneo .orden { flex: 0 0 22px; color: var(--tenue); font-size: .72rem; }
+  .linea-escaneo .desc { flex: 1 1 auto; min-width: 0; }
+  .linea-escaneo .desc .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .linea-escaneo .desc .por { font-size: .7rem; color: var(--tenue); }
+  .linea-escaneo .pts { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .linea-escaneo .quitar { flex: 0 0 auto; padding: 4px 8px; font-size: .7rem; }
+
+  #barra-club {
+    position: sticky; top: 0; z-index: 15;
+    background: #0b1020ee; backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--borde);
+    margin: -20px -20px 14px; padding: 12px 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  #barra-club .nombre { font-weight: 700; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #barra-club .total { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--acento); }
+
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="principal">
+  <h1>Evaluador de fichas</h1>
+  <p id="estado-cabecera">Campori de Aventureros · De vuelta a casa</p>
+</header>
+
+<main>
+
+  <!-- ============================================== CLUBES ============ -->
+  <section class="vista activa" id="vista-clubes">
+    <div class="buscador">
+      <div class="fila">
+        <input type="search" id="buscar" placeholder="Buscar club, iglesia o región…" autocomplete="off">
+        <select id="filtro-region" class="angosto"><option value="">Todas las regiones</option></select>
+        <select id="filtro-estado" class="angosto">
+          <option value="">Todos</option>
+          <option value="sin">Sin evaluar</option>
+          <option value="curso">En curso</option>
+          <option value="cerrada">Cerradas</option>
+          <option value="alerta">Con alertas</option>
+        </select>
+      </div>
+    </div>
+    <div id="lista-clubes"></div>
+  </section>
+
+  <!-- ============================================== ESCANEO =========== -->
+  <section class="vista" id="vista-escaneo">
+    <div id="barra-club">
+      <button id="volver" style="padding:6px 10px">‹</button>
+      <div class="nombre" id="club-nombre">—</div>
+      <div class="total" id="club-total">0</div>
+    </div>
+
+    <div id="sin-club" class="panel">
+      <h2>Elegí un club</h2>
+      <p class="chico tenue">Volvé a la lista y tocá el club cuya ficha vas a evaluar.
+        También podés escanear directamente el QR de la cabecera de la ficha.</p>
+      <button class="principal" id="ir-a-clubes">Ver la lista de clubes</button>
+    </div>
+
+    <div id="zona-escaneo" class="oculto">
+      <div class="marco-camara">
+        <video id="video" muted playsinline></video>
+        <div class="mira" id="mira" hidden></div>
+        <div class="apagada" id="camara-apagada">
+          <div style="font-size:2rem">📷</div>
+          <div id="mensaje-camara">La cámara está apagada</div>
+          <button class="principal" id="encender">Encender cámara</button>
+        </div>
+      </div>
+
+      <div class="fila no-imprimir" style="margin-bottom:12px">
+        <button id="apagar" class="oculto">Apagar cámara</button>
+        <button id="linterna" class="oculto">Linterna</button>
+        <button id="manual">Cargar código a mano</button>
+      </div>
+
+      <div id="resultado-escaneo" class="info">
+        <div class="icono">📋</div>
+        <div>
+          <div class="titulo">Listo para escanear</div>
+          <div class="sub">Pasá la cámara por cada sticker de la ficha, uno por uno.</div>
+        </div>
+      </div>
+
+      <div class="marcadores">
+        <div class="marcador" id="m-fisicos"><div class="valor">0/8</div><div class="rotulo">Físicos</div></div>
+        <div class="marcador" id="m-espirituales"><div class="valor">0/7</div><div class="rotulo">Espirit.</div></div>
+        <div class="marcador" id="m-adicional"><div class="valor">0</div><div class="rotulo">Adicional</div></div>
+        <div class="marcador" id="m-total"><div class="valor">0</div><div class="rotulo">Total</div></div>
+      </div>
+
+      <div id="alertas-club"></div>
+
+      <div class="panel">
+        <h2>Escaneos de esta ficha <span class="tenue chico" id="conteo-escaneos"></span></h2>
+        <div id="lista-escaneos"><p class="tenue chico">Todavía no escaneaste nada.</p></div>
+      </div>
+
+      <div class="fila">
+        <button class="principal" id="cerrar-ficha">Marcar ficha como terminada</button>
+        <button class="peligro" id="borrar-ficha">Borrar todos los escaneos</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== RESULTADOS ======== -->
+  <section class="vista" id="vista-resultados">
+    <div class="panel">
+      <h2>Resumen general</h2>
+      <div id="totales-generales" class="rejilla" style="margin-bottom:14px"></div>
+      <div class="fila">
+        <button class="principal" id="exportar-excel">Descargar Excel</button>
+        <button id="exportar-csv">Descargar CSV</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Puntajes por club</h2>
+      <div style="overflow-x:auto">
+        <table id="tabla-resultados">
+          <thead><tr>
+            <th>Club</th><th>Región</th>
+            <th class="num">Fís.</th><th class="num">Esp.</th><th class="num">Adic.</th>
+            <th class="num">Total</th><th>Estado</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== AJUSTES =========== -->
+  <section class="vista" id="vista-ajustes">
+    <div class="panel">
+      <h2>Inventario de stickers</h2>
+      <p class="chico tenue" style="margin-top:-6px">
+        Cargá el archivo que descargaste del generador. Sin él la app valida la firma
+        del QR pero no puede distinguir un sticker que imprimimos nosotros de uno
+        fabricado por fuera con el mismo formato.
+      </p>
+      <div id="estado-inventario" class="aviso-caja">Sin inventario cargado.</div>
+      <div class="fila">
+        <div>
+          <label for="cargar-inventario">Archivo de inventario (.json)</label>
+          <input type="file" id="cargar-inventario" accept="application/json,.json">
+        </div>
+        <div><button id="quitar-inventario">Quitar inventario</button></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Pasar datos entre teléfonos</h2>
+      <p class="chico tenue" style="margin-top:-6px">
+        Si evalúan con varios celulares, exportá desde cada uno e importá todo en el
+        que vaya a generar el Excel final. Importar nunca borra nada: solo agrega
+        lo que falta.
+      </p>
+      <div class="fila">
+        <div><button class="principal" id="exportar-datos">Exportar mis datos</button></div>
+        <div>
+          <label for="importar-datos">Importar datos de otro teléfono</label>
+          <input type="file" id="importar-datos" accept="application/json,.json">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Diagnóstico</h2>
+      <div id="diagnostico" class="chico"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Zona peligrosa</h2>
+      <p class="chico tenue" style="margin-top:-6px">Borra todos los escaneos de todos los clubes de este teléfono. No se puede deshacer.</p>
+      <button class="peligro" id="borrar-todo">Borrar todos los datos</button>
+    </div>
+  </section>
+
+</main>
+
+<nav class="pestanas">
+  <button data-vista="clubes" aria-current="true">Clubes</button>
+  <button data-vista="escaneo">Escanear</button>
+  <button data-vista="resultados">Resultados</button>
+  <button data-vista="ajustes">Ajustes</button>
+</nav>
+
+<script type="module" src="js/evaluador.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "Evaluador Campori de Aventureros",
+  "short_name": "Campori QR",
+  "description": "Escaneo de fichas por código QR y puntaje automático por club.",
+  "start_url": "./evaluador.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "lang": "es",
+  "icons": [
+    { "src": "./icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

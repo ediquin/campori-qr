@@ -1,0 +1,12 @@
+{
+  "name": "campori-qr",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Evaluacion de clubes por codigos QR para el Campori de Aventureros. Sin dependencias.",
+  "scripts": {
+    "clubes": "node herramientas/generar-clubes.mjs",
+    "test": "node herramientas/pruebas.mjs",
+    "servir": "node herramientas/servidor.mjs"
+  }
+}

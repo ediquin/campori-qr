@@ -1,0 +1,189 @@
+/* Lo que sale por la impresora: hojas de stickers y fichas de evaluacion.
+   Todas las medidas van en milimetros porque el resultado es fisico: un sticker
+   de 26 mm tiene que medir 26 mm en el papel. */
+
+/* Compacta a proposito: 9 filas de stickers ocupan 270 mm y en una A4 con margenes
+   de 8 mm quedan 281 utiles. Si esta cabecera crece, cada hoja empuja una pagina
+   en blanco detras. */
+.hoja-titulo {
+  font: 600 8.5pt/1.2 system-ui, sans-serif;
+  padding: 1mm 2mm 1.5mm;
+  border-bottom: .3mm solid #000;
+  margin-bottom: 2mm;
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+}
+.hoja-titulo .derecha { font-weight: 400; color: #444; }
+
+/* ---------------------------------------------------------------- stickers */
+
+/* El sticker mide 24 x 29 mm: 24 de codigo QR mas una linea de texto para que el
+   juez de la estacion sepa de que taco es. Con 33 modulos en 24 mm cada modulo
+   queda en 0,73 mm, bien por encima de lo que necesita la camara de un celular. */
+.rejilla-stickers {
+  display: grid;
+  grid-template-columns: repeat(7, 25mm);
+  grid-auto-rows: 30mm;
+  justify-content: center;
+}
+
+.sticker {
+  width: 24mm;
+  height: 29mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Guia de corte tenue: se ve para cortar y casi no se nota si queda impresa. */
+  outline: .2mm dashed #bbb;
+  outline-offset: -.1mm;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.sticker svg { width: 24mm; height: 24mm; display: block; }
+
+.sticker .pie {
+  font: 700 5.5pt/1 ui-monospace, Consolas, monospace;
+  letter-spacing: .2px;
+  text-align: center;
+  padding-top: .6mm;
+  white-space: nowrap;
+}
+.sticker .pie .serial { font-weight: 400; color: #555; }
+
+/* ---------------------------------------------------------------- ficha de club */
+
+.ficha { padding: 2mm; font-family: system-ui, sans-serif; color: #000; }
+
+.ficha-cabecera {
+  display: flex;
+  gap: 4mm;
+  align-items: center;
+  border: .4mm solid #000;
+  border-radius: 2mm;
+  padding: 3mm;
+  margin-bottom: 3mm;
+}
+.ficha-cabecera svg { width: 24mm; height: 24mm; display: block; flex: 0 0 auto; }
+.ficha-cabecera .datos { flex: 1 1 auto; min-width: 0; }
+.ficha-cabecera .nombre { font: 700 15pt/1.1 system-ui, sans-serif; }
+.ficha-cabecera .meta { font-size: 8pt; color: #333; margin-top: 1mm; }
+.ficha-cabecera .id { font: 700 9pt/1 ui-monospace, Consolas, monospace; margin-top: 1.5mm; }
+.ficha-cabecera .evento { text-align: right; font-size: 7.5pt; color: #444; flex: 0 0 auto; }
+
+.ficha h3 {
+  font-size: 9.5pt;
+  margin: 3mm 0 1.5mm;
+  padding-bottom: .8mm;
+  border-bottom: .3mm solid #000;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.ficha h3 .regla { font-weight: 400; font-size: 7.5pt; color: #444; }
+
+.casillas { display: grid; gap: 1.5mm; grid-template-columns: repeat(4, 1fr); }
+/* Los criterios adicionales van en una sola fila mas angosta: son varios y si
+   ocuparan dos filas la ficha ya no entraria en una hoja. */
+.casillas.angostas { grid-template-columns: repeat(6, 1fr); }
+
+.casilla {
+  border: .3mm dashed #666;
+  border-radius: 1.5mm;
+  /* 29 mm del sticker + rotulo + aire. Si se achica, el sticker se sale del recuadro. */
+  height: 38mm;
+  padding: 1mm;
+  display: flex;
+  flex-direction: column;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.casilla .rotulo {
+  font-size: 6.5pt;
+  line-height: 1.15;
+  font-weight: 600;
+  min-height: 6mm;
+}
+.casillas.angostas .rotulo { font-size: 5.5pt; }
+.casilla .rotulo .num { color: #666; }
+.casilla .hueco {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6pt;
+  color: #aaa;
+}
+
+.ficha-pie {
+  margin-top: 3mm;
+  padding-top: 2mm;
+  border-top: .3mm solid #000;
+  font-size: 7pt;
+  color: #333;
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+}
+.ficha-pie .firma {
+  border-top: .3mm solid #000;
+  width: 55mm;
+  padding-top: 1mm;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- kit de prueba */
+
+/* Los stickers del kit van rotulados con lo que tiene que pasar al escanearlos,
+   asi que ocupan mas que los de produccion. No son para el campori: son para el
+   ensayo previo. */
+
+.kit { padding: 2mm; font-family: system-ui, sans-serif; color: #000; }
+
+.kit-titulo {
+  border: .4mm solid #000;
+  border-radius: 2mm;
+  padding: 2.5mm 3mm;
+  margin-bottom: 3mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4mm;
+  font-size: 10pt;
+}
+.kit-titulo span { font-size: 7.5pt; color: #444; }
+
+.grupo-kit {
+  font-size: 8.5pt;
+  margin: 3mm 0 1.5mm;
+  padding-bottom: .6mm;
+  border-bottom: .3mm solid #000;
+}
+
+.rejilla-kit {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2mm;
+}
+
+.sticker-kit {
+  border: .3mm solid #999;
+  border-radius: 1.5mm;
+  padding: 1.5mm;
+  display: flex;
+  gap: 2mm;
+  align-items: center;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+/* Los que deben ser rechazados van marcados: si alguno suma puntos, hay un problema. */
+.sticker-kit.trampa { border: .5mm dashed #000; background: #f0f0f0; }
+
+.sticker-kit svg { width: 17mm; height: 17mm; display: block; flex: 0 0 auto; }
+
+.rotulo-kit { font-size: 5.5pt; line-height: 1.25; min-width: 0; }
+.rotulo-kit strong { font-family: ui-monospace, Consolas, monospace; }
+.rotulo-kit .serial-kit { color: #666; font-family: ui-monospace, Consolas, monospace; }
+.rotulo-kit .esperado-ok { font-weight: 700; }
+.rotulo-kit .esperado-trampa { font-weight: 700; text-transform: uppercase; }

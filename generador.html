@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generador de stickers y fichas — Campori de Aventureros</title>
+<link rel="stylesheet" href="css/estilo.css">
+<link rel="stylesheet" href="css/impresos.css">
+<style>
+  .opcion-evento {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; margin: 0;
+    background: var(--fondo-2); border: 1px solid var(--borde); border-radius: 9px;
+    cursor: pointer; font-size: .82rem; color: var(--texto);
+  }
+  .opcion-evento:hover { border-color: var(--acento-2); }
+  .opcion-evento input { flex: 0 0 auto; accent-color: var(--acento); margin: 0; padding: 0; }
+  .opcion-evento .mono { flex: 0 0 auto; color: var(--acento-2); font-weight: 700; font-size: .75rem; }
+  .opcion-evento .nombre { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .opcion-evento .pastilla { flex: 0 0 auto; }
+
+  .panel h3 { display: flex; align-items: center; gap: 10px; }
+  .panel h3 button { padding: 3px 9px; font-size: .7rem; font-weight: 500; }
+
+  #barra-impresion {
+    position: sticky; bottom: 0; z-index: 10;
+    display: none; gap: 12px; align-items: center; flex-wrap: wrap;
+    background: #141b33f2; backdrop-filter: blur(8px);
+    border: 1px solid var(--borde); border-radius: var(--radio);
+    padding: 12px 16px; margin-bottom: 16px; box-shadow: var(--sombra);
+  }
+  #progreso {
+    display: none; padding: 10px 14px; border-radius: 9px;
+    background: #6ea8ff1a; border: 1px solid #6ea8ff44; font-size: .85rem;
+  }
+  .pasos { counter-reset: paso; }
+  .pasos .panel h2::before {
+    counter-increment: paso; content: counter(paso);
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; margin-right: 9px; border-radius: 50%;
+    background: var(--acento); color: #2a1a00; font-size: .78rem;
+  }
+</style>
+</head>
+<body>
+
+<header class="principal no-imprimir">
+  <h1>Generador de stickers y fichas</h1>
+  <p>Campori de Aventureros · De vuelta a casa — imprimí los códigos QR y las fichas de evaluación</p>
+</header>
+
+<main>
+  <div class="pasos no-imprimir">
+
+    <section class="panel">
+      <h2>Hojas de stickers</h2>
+      <p class="chico tenue" style="margin-top:-6px">
+        Cada hoja A4 trae 56 stickers de 26 mm de un mismo evento, listos para recortar y
+        entregarle al juez de esa estación. Cada sticker lleva un número de serie único:
+        eso es lo que permite después detectar uno fotocopiado o prestado entre clubes.
+      </p>
+
+      <div class="fila" style="margin-bottom:14px">
+        <div class="angosto">
+          <label for="cantidad">Stickers por evento</label>
+          <input type="number" id="cantidad" value="80" min="1" max="2000">
+        </div>
+        <div style="flex:2 1 300px">
+          <label>&nbsp;</label>
+          <div class="pastilla info" id="conteo-stickers"></div>
+        </div>
+      </div>
+
+      <div class="aviso-caja" id="aviso-volumen" style="display:none"></div>
+
+      <div id="eventos"></div>
+
+      <div style="margin-top:16px">
+        <button class="principal" id="generar-stickers">Generar hojas de stickers</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Fichas de evaluación</h2>
+      <p class="chico tenue" style="margin-top:-6px">
+        Una hoja por club, con el QR del club en la cabecera y las casillas donde pegan
+        sus stickers durante el campamento. Las casillas espirituales van rotuladas con
+        el nombre de cada evento; las físicas van sin rótulo porque eligen 8 de 14.
+      </p>
+      <div class="pastilla info" id="conteo-fichas" style="margin-bottom:12px"></div>
+
+      <div id="clubes"></div>
+
+      <div style="margin-top:16px">
+        <button class="principal" id="generar-fichas">Generar fichas</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Inventario de seriales</h2>
+      <p class="chico tenue" style="margin-top:-6px">
+        Guardá este archivo apenas termines de imprimir y cargalo en la app evaluadora.
+        Sin él la app igual valida la firma del QR, pero no puede distinguir un sticker
+        que imprimimos nosotros de uno fabricado por fuera.
+      </p>
+
+      <div class="aviso-caja alerta">
+        <strong>Si perdés este archivo no se puede reconstruir.</strong>
+        Cargalo de nuevo acá antes de imprimir una segunda tanda, así los seriales
+        siguen la numeración en vez de repetirse.
+      </div>
+
+      <div id="resumen-inventario" class="chico" style="margin:12px 0"></div>
+
+      <div class="fila">
+        <div><button class="principal" id="bajar-inventario" disabled>Descargar inventario</button></div>
+        <div>
+          <label for="subir-inventario">Cargar un inventario anterior</label>
+          <input type="file" id="subir-inventario" accept="application/json,.json">
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div id="progreso" class="no-imprimir"></div>
+
+  <div id="barra-impresion" class="no-imprimir">
+    <strong id="estado-salida"></strong>
+    <span style="flex:1 1 auto"></span>
+    <button class="principal" id="imprimir">Imprimir</button>
+    <button id="limpiar">Borrar vista previa</button>
+  </div>
+
+  <div id="salida"></div>
+</main>
+
+<script type="module" src="js/generador.js"></script>
+</body>
+</html>

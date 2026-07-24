@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<title>Campori de Aventureros — Sistema de puntajes</title>
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/estilo.css">
+<style>
+  .tarjetas { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  a.tarjeta {
+    display: block; text-decoration: none; color: var(--texto);
+    background: var(--panel); border: 1px solid var(--borde);
+    border-radius: var(--radio); padding: 22px; box-shadow: var(--sombra);
+    transition: border-color .15s, transform .15s;
+  }
+  a.tarjeta:hover { border-color: var(--acento); transform: translateY(-2px); }
+  a.tarjeta .emoji { font-size: 2rem; }
+  a.tarjeta h2 { color: var(--acento); margin: 10px 0 8px; font-size: 1.05rem; }
+  a.tarjeta p { margin: 0; color: var(--tenue); font-size: .85rem; line-height: 1.5; }
+  ol.pasos { line-height: 1.7; font-size: .88rem; padding-left: 20px; }
+  ol.pasos strong { color: var(--acento-2); }
+</style>
+</head>
+<body>
+
+<header class="principal">
+  <h1>Campori de Aventureros · De vuelta a casa</h1>
+  <p>Sistema de evaluación por códigos QR</p>
+</header>
+
+<main>
+  <div class="tarjetas" style="margin-bottom:22px">
+    <a class="tarjeta" href="generador.html">
+      <div class="emoji">🖨️</div>
+      <h2>Generador</h2>
+      <p>Imprime las hojas de stickers con código QR y las fichas de evaluación de cada
+         club. Se usa <strong>antes</strong> del campori, desde una computadora.</p>
+    </a>
+    <a class="tarjeta" href="evaluador.html">
+      <div class="emoji">📷</div>
+      <h2>Evaluador</h2>
+      <p>Escanea las fichas con la cámara del celular y arma el puntaje solo.
+         Funciona sin señal y exporta todo a Excel.</p>
+    </a>
+    <a class="tarjeta" href="kit-prueba.html">
+      <div class="emoji">🧪</div>
+      <h2>Kit de prueba</h2>
+      <p>Un ensayo completo antes del campori: dos hojas para imprimir, con las
+         trampas incluidas, y el resultado que tiene que dar.</p>
+    </a>
+    <a class="tarjeta" href="prueba-camara.html">
+      <div class="emoji">🔎</div>
+      <h2>Prueba de cámara</h2>
+      <p>Para revisar que cada celular del equipo lee bien los códigos.
+         Anda en Android y en iPhone.</p>
+    </a>
+  </div>
+
+  <section class="panel">
+    <h2>Cómo se usa, de principio a fin</h2>
+    <ol class="pasos">
+      <li>Antes del campori, en el <strong>generador</strong>: imprimí las hojas de stickers
+        (una tanda por evento) y descargá el <strong>inventario</strong>. Guardalo bien:
+        sin ese archivo no se puede detectar un sticker falsificado.</li>
+      <li>Imprimí también una <strong>ficha por club</strong> y entregala con su carpeta.</li>
+      <li>Cada juez de estación recibe el taco de stickers de <em>su</em> evento y le entrega
+        uno al club que lo completa.</li>
+      <li>Durante el campamento, los clubes pegan sus stickers en la ficha.</li>
+      <li>Al recibir las fichas, en el <strong>evaluador</strong>: cargá el inventario una vez,
+        elegí el club (o escaneá el QR de la cabecera de la ficha) y pasá la cámara por
+        cada sticker.</li>
+      <li>La app avisa al instante si hay un evento repetido, más de 8 físicos, o un
+        sticker que ya usó otro club.</li>
+      <li>Al final, <strong>Descargar Excel</strong>. Si evaluaron con varios celulares,
+        exportá de cada uno e importá todo en uno solo antes de generar la planilla.</li>
+    </ol>
+  </section>
+
+  <section class="panel">
+    <h2>Las reglas que aplica el sistema</h2>
+    <table>
+      <thead><tr><th>Bloque</th><th>Eventos</th><th class="num">Puntos c/u</th><th>Regla</th><th class="num">Máximo</th></tr></thead>
+      <tbody>
+        <tr><td>Físicos</td><td>14 disponibles</td><td class="num">200</td><td>Solo cuentan los 8 primeros escaneados</td><td class="num">1600</td></tr>
+        <tr><td>Espirituales</td><td>7</td><td class="num">200</td><td>Los 7 son obligatorios</td><td class="num">1400</td></tr>
+        <tr><td colspan="4"><strong>Puntaje base</strong></td><td class="num"><strong>3000</strong></td></tr>
+        <tr><td>Adicional</td><td>criterios sueltos</td><td class="num">100 / 50</td><td>Suma aparte del puntaje base</td><td class="num">—</td></tr>
+      </tbody>
+    </table>
+    <p class="chico tenue" style="margin-bottom:0">
+      Ningún evento puede repetirse. Cada sticker lleva un número de serie único, así que
+      un sticker fotocopiado o prestado entre clubes queda marcado al escanearlo.
+    </p>
+  </section>
+</main>
+
+</body>
+</html>

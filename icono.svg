@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b1020"/>
+  <circle cx="410" cy="110" r="46" fill="#ffb43f" opacity=".9"/>
+  <circle cx="96" cy="420" r="18" fill="#6ea8ff" opacity=".7"/>
+  <circle cx="430" cy="400" r="10" fill="#eef2ff" opacity=".5"/>
+  <circle cx="80" cy="120" r="8" fill="#eef2ff" opacity=".5"/>
+  <!-- Tres esquinas de codigo QR: se reconoce al instante aunque el icono sea chico. -->
+  <g fill="#eef2ff">
+    <path d="M112 112h96v96h-96z" fill="none" stroke="#eef2ff" stroke-width="22"/>
+    <rect x="149" y="149" width="22" height="22"/>
+    <path d="M304 112h96v96h-96z" fill="none" stroke="#eef2ff" stroke-width="22"/>
+    <rect x="341" y="149" width="22" height="22"/>
+    <path d="M112 304h96v96h-96z" fill="none" stroke="#eef2ff" stroke-width="22"/>
+    <rect x="149" y="341" width="22" height="22"/>
+  </g>
+  <g fill="#ffb43f">
+    <rect x="288" y="288" width="34" height="34"/>
+    <rect x="344" y="288" width="34" height="34"/>
+    <rect x="288" y="344" width="34" height="34"/>
+    <rect x="366" y="344" width="34" height="34"/>
+    <rect x="322" y="366" width="34" height="34"/>
+  </g>
+</svg>

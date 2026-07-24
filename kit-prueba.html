@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<title>Kit de prueba — Campori de Aventureros</title>
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/estilo.css">
+<link rel="stylesheet" href="css/impresos.css">
+<style>
+  .marcador {
+    background: var(--fondo-2); border: 1px solid var(--borde);
+    border-radius: 10px; padding: 10px 8px; text-align: center;
+  }
+  .marcador .valor { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .marcador .rotulo { font-size: .62rem; color: var(--tenue); text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
+  ol.pasos { line-height: 1.75; font-size: .88rem; padding-left: 20px; }
+  ol.pasos strong { color: var(--acento-2); }
+  ol.pasos code {
+    background: var(--fondo-2); border: 1px solid var(--borde);
+    padding: 1px 6px; border-radius: 5px; font-size: .85em;
+  }
+  #barra-impresion {
+    position: sticky; bottom: 0; z-index: 10;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    background: #141b33f2; backdrop-filter: blur(8px);
+    border: 1px solid var(--borde); border-radius: var(--radio);
+    padding: 12px 16px; margin-bottom: 16px; box-shadow: var(--sombra);
+  }
+</style>
+</head>
+<body>
+
+<header class="principal no-imprimir">
+  <h1>Kit de prueba</h1>
+  <p>Un ensayo completo del sistema, de punta a punta, sin tocar datos de clubes reales</p>
+</header>
+
+<main>
+  <section class="panel no-imprimir">
+    <h2>Qué es esto</h2>
+    <p class="chico tenue" style="margin-top:-6px">
+      Dos hojas para imprimir: la ficha del club de prueba <strong>ediquin</strong> y los
+      stickers para pegarle. Los stickers no son de relleno — cada uno dispara una
+      situación distinta, incluidas las tres trampas que el sistema tiene que cazar.
+      Así comprobás el circuito real (imprimir → pegar → escanear → Excel) antes del campori.
+    </p>
+    <div class="aviso-caja">
+      Si no tenés impresora, sirve igual: escaneá los códigos directamente
+      <strong>desde la pantalla</strong> con el celular. Se leen perfecto.
+    </div>
+  </section>
+
+  <section class="panel no-imprimir">
+    <h2>Cómo probarlo</h2>
+    <ol class="pasos">
+      <li><strong>Imprimí estas dos hojas</strong> con el botón de abajo. Al 100%, sin
+        "ajustar a página". O dejalas en pantalla para escanear desde ahí.</li>
+      <li><strong>Descargá el inventario</strong> del kit (botón de abajo) y cargalo en
+        el evaluador, en <code>Ajustes → Inventario de stickers</code>. Sin ese paso, la
+        trampa del serial falsificado no se detecta.</li>
+      <li>Abrí <a href="evaluador.html">el evaluador</a> y escaneá <strong>el QR de la
+        cabecera de la ficha</strong>. Tiene que abrir solo el club <em>ediquin</em>.</li>
+      <li>Escaneá los stickers <strong>en el orden en que están impresos</strong>. Fijate
+        que cada uno suene distinto según sea válido o trampa.</li>
+      <li>Comparalo con el resultado esperado que está acá abajo. Tiene que dar
+        <strong id="total-esperado">—</strong> puntos.</li>
+      <li>Andá a <code>Resultados → Descargar Excel</code> y abrí la planilla.</li>
+      <li>Cuando termines, en el evaluador entrá a <em>ediquin</em> y tocá
+        <code>Borrar todos los escaneos</code> para dejarlo limpio.</li>
+    </ol>
+  </section>
+
+  <section class="panel no-imprimir">
+    <h2>Resultado que tiene que dar</h2>
+    <div id="esperado"></div>
+  </section>
+
+  <div id="barra-impresion" class="no-imprimir">
+    <button class="principal" id="imprimir">Imprimir las dos hojas</button>
+    <button id="bajar-inventario">Descargar inventario del kit</button>
+    <span style="flex:1 1 auto"></span>
+    <a href="index.html" class="chico tenue">volver al menú</a>
+  </div>
+
+  <div id="salida"></div>
+</main>
+
+<script type="module" src="js/kit-prueba.js"></script>
+</body>
+</html>
