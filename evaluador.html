@@ -233,8 +233,7 @@
       <h2>Este teléfono</h2>
       <p class="chico tenue" style="margin-top:-6px">
         Poné quién evalúa con este celular. Queda anotado en cada escaneo, así que
-        al juntar los datos de varios teléfonos se sabe quién cargó qué, y la app
-        puede avisar si dos personas evaluaron el mismo club sin querer.
+        en Google Sheets se sabe quién cargó qué y desde qué dispositivo.
       </p>
       <div class="fila">
         <div>
@@ -245,8 +244,7 @@
       </div>
       <div class="aviso-caja" id="aviso-reloj" style="margin-bottom:0">
         <strong>Revisá que la hora del celular esté bien.</strong> La regla de "los 8
-        primeros eventos físicos" usa la hora de cada escaneo. Si dos teléfonos tienen
-        horas distintas, al juntarlos el orden puede salir cambiado.
+        primeros eventos físicos" usa la hora de cada escaneo.
       </div>
     </div>
 
@@ -268,35 +266,16 @@
     </div>
 
     <div class="panel">
-      <h2>Pasar datos entre teléfonos</h2>
+      <h2>Sincronización con Google Sheets</h2>
       <p class="chico tenue" style="margin-top:-6px">
-        Si evalúan con varios celulares, exportá desde cada uno e importá todo en el
-        que vaya a generar el Excel final. Importar nunca borra nada: solo agrega
-        lo que falta, y avisa si un club fue evaluado desde más de un teléfono.
-      </p>
-      <div class="fila">
-        <div><button class="principal" id="exportar-datos">Exportar mis datos</button></div>
-        <div>
-          <label for="importar-datos">Importar datos de otro teléfono</label>
-          <input type="file" id="importar-datos" accept="application/json,.json">
-        </div>
-      </div>
-      <div id="cruces-dispositivos"></div>
-    </div>
-
-    <div class="panel">
-      <h2>Enviar a Google Sheets <span class="pastilla">opcional</span></h2>
-      <p class="chico tenue" style="margin-top:-6px">
-        Sube los puntajes a una planilla de Google. Necesita internet <em>en el momento
-        de enviar</em>: se usa al final, cuando vuelve la señal. No cambia en nada el
-        funcionamiento sin señal — el teléfono sigue siendo la fuente de verdad.
+        Cada teléfono guarda sus escaneos localmente y, cuando tiene conexión, envía
+        los puntajes y el detalle a la planilla compartida.
       </p>
       <div class="aviso-caja">
         Se envían <strong>solo los clubes que evaluaste en este teléfono</strong>, y en
         la planilla se fusionan con lo que ya haya. Por eso pueden mandar varios
-        evaluadores a la misma planilla sin pisarse, y cada uno puede reenviar las
-        veces que quiera. <strong>Esto no reemplaza al Exportar/Importar entre
-        teléfonos:</strong> la planilla es para mirar y compartir, no vuelve a los celulares.
+        evaluadores sin pisarse. Al traer los seriales compartidos, un QR encontrado
+        en dos clubes deja a ambos en conflicto y sin puntos hasta la revisión manual.
       </div>
 
       <details style="margin-bottom:14px">
@@ -316,18 +295,15 @@
       <div class="fila" style="margin-bottom:12px">
         <div style="flex:3 1 320px">
           <label for="sheets-url">Dirección del script (termina en /exec)</label>
-          <input type="url" id="sheets-url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+          <input type="url" id="sheets-url"
+            value="https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec"
+            placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
         </div>
         <div>
           <label for="sheets-clave">Clave</label>
           <input type="text" id="sheets-clave" placeholder="la misma del script" autocomplete="off">
         </div>
       </div>
-
-      <label class="chico" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer">
-        <input type="checkbox" id="sheets-detalle" checked style="accent-color:var(--acento)">
-        Incluir también el detalle de escaneos y las alertas
-      </label>
 
       <div class="fila" style="margin-bottom:14px">
         <div><button class="principal" id="sheets-enviar">Enviar mis puntajes</button></div>

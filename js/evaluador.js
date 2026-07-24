@@ -31,31 +31,11 @@ const estado = {
   // Que sticker uso cada club segun la planilla compartida. Es lo que permite
   // detectar un sticker prestado entre clubes que evaluaron personas distintas:
   // este telefono por si solo nunca lo sabria.
-  remotos: new Map(),   // id de sticker -> id de club, traido de Sheets
+  remotos: new Map(),   // id de sticker -> ids de clubes, traidos de Sheets
   remotosFecha: null,
   escaner: null,
   linternaEncendida: false,
 };
-
-/**
- * Clubes que tienen escaneos cargados desde mas de un telefono.
- *
- * No es un error por si mismo — puede que se hayan repartido el trabajo a proposito —
- * pero casi siempre significa que dos personas evaluaron la misma ficha sin saberlo,
- * y ahi la regla de "los 8 primeros" se resuelve por hora de escaneo entre telefonos
- * con relojes que pueden no coincidir. Conviene revisarlo a mano.
- */
-function clubesCruzados() {
-  const porClub = new Map();
-  for (const e of estado.todos) {
-    const quien = e.dispositivo || '(sin nombre)';
-    if (!porClub.has(e.idClub)) porClub.set(e.idClub, new Set());
-    porClub.get(e.idClub).add(quien);
-  }
-  return [...porClub.entries()]
-    .filter(([, quienes]) => quienes.size > 1)
-    .map(([idClub, quienes]) => ({ club: buscarClub(idClub), quienes: [...quienes] }));
-}
 
 // ------------------------------------------------------------------ calculo
 
@@ -68,16 +48,13 @@ function clubesCruzados() {
  * estar en telefonos distintos.
  */
 function usadosPorOtros(idClubActual) {
-  const mapa = new Map();
+  // De la planilla: si el mismo sticker figura en dos o mas clubes, TODOS quedan
+  // en conflicto. No elegimos un dueño automaticamente; se resuelve con los
+  // directores y se corrige en la planilla final.
+  const mapa = sheets.conflictosRemotosParaClub(estado.remotos, idClubActual);
 
-  // De la planilla: lo que cargaron los demas telefonos. Se saltean las entradas
-  // del club que estamos evaluando, que son las que mandamos nosotros mismos en
-  // un envio anterior: no son un conflicto, somos nosotros.
-  for (const [idSticker, idClub] of estado.remotos) {
-    if (idClub !== idClubActual) mapa.set(idSticker, idClub);
-  }
-
-  // De este telefono. Pisa a lo remoto porque es mas fresco.
+  // De este telefono. Complementa lo remoto y permite detectar el conflicto aunque
+  // los dos clubes hayan sido evaluados con el mismo celular.
   for (const e of estado.todos) {
     if (e.idClub === idClubActual) continue;
     const l = leerQr(e.crudo);
@@ -489,7 +466,6 @@ async function enviarASheets() {
   await guardarSheets();
   const url = $('#sheets-url').value.trim();
   const clave = $('#sheets-clave').value;
-  const conDetalle = $('#sheets-detalle').checked;
 
   const boton = $('#sheets-enviar');
   boton.disabled = true;
@@ -499,7 +475,9 @@ async function enviarASheets() {
   // Mandamos solo los clubes que este telefono evaluo. Si mandaramos los 72, los
   // que no tocamos irian con cero y borrarian en la planilla lo que cargo otro.
   const todas = hojasParaExportar({ soloConEscaneos: true });
-  const hojas = conDetalle ? todas : todas.filter(h => h.nombre === 'Puntajes' || h.nombre === 'Parámetros');
+  // El detalle es obligatorio: contiene el QR/serial que permite descubrir el
+  // mismo sticker en clubes evaluados desde telefonos diferentes.
+  const hojas = todas;
 
   const mios = resultadosDeTodos().filter(t => t.escaneos.length);
   if (!mios.length) {
@@ -555,9 +533,9 @@ async function traerDeSheets(silencioso = false) {
   // Las claves vienen como el texto del QR; lo pasamos al id de sticker (evento-serial),
   // que es con lo que trabaja el motor de puntaje.
   estado.remotos = new Map();
-  for (const [crudo, idClub] of Object.entries(r.seriales || {})) {
+  for (const [crudo, clubes] of sheets.normalizarSeriales(r.seriales || {})) {
     const id = idDeSticker(crudo);
-    if (id) estado.remotos.set(id, idClub);
+    if (id) estado.remotos.set(id, clubes);
   }
   estado.remotosFecha = Date.now();
   await almacen.guardarAjuste('remotos', [...estado.remotos]);
@@ -595,21 +573,6 @@ async function probarSheets() {
   boton.disabled = false;
   if (r.ok) mostrarEstadoSheets('ok', r.mensaje || 'El script responde correctamente.');
   else mostrarEstadoSheets('alerta', r.error || 'No respondió.');
-}
-
-// ------------------------------------------------------------------ varios telefonos
-
-function pintarCruces() {
-  const cruces = clubesCruzados();
-  $('#cruces-dispositivos').innerHTML = !cruces.length ? '' : `
-    <div class="aviso-caja alerta" style="margin-bottom:0">
-      <strong>${cruces.length} club${cruces.length === 1 ? '' : 'es'} con escaneos de más de un teléfono.</strong>
-      Revisá estas fichas a mano: si dos personas evaluaron la misma, la regla de los
-      8 primeros eventos físicos se resolvió por hora de escaneo entre teléfonos distintos.
-      <ul style="margin:8px 0 0;padding-left:18px">
-        ${cruces.map(c => `<li>${escapar(c.club?.nombre || '?')} — ${escapar(c.quienes.join(', '))}</li>`).join('')}
-      </ul>
-    </div>`;
 }
 
 // ------------------------------------------------------------------ ajustes
@@ -661,7 +624,10 @@ async function iniciar() {
 
   estado.dispositivo = await almacen.leerAjuste('dispositivo', '') || '';
   $('#nombre-dispositivo').value = estado.dispositivo;
-  $('#sheets-url').value = await almacen.leerAjuste('sheetsUrl', '') || '';
+  // La direccion oficial ya viene lista. Un valor guardado permite reemplazarla si
+  // alguna vez se publica una implementacion nueva con otra URL.
+  $('#sheets-url').value =
+    await almacen.leerAjuste('sheetsUrl', '') || sheets.URL_PREDETERMINADA;
   $('#sheets-clave').value = await almacen.leerAjuste('sheetsClave', '') || '';
 
   const remotos = await almacen.leerAjuste('remotos', null);
@@ -676,7 +642,6 @@ async function iniciar() {
 
   pintarEstadoInventario();
   pintarEstadoRemotos();
-  pintarCruces();
   pintarClubes();
 
   if (estado.dispositivo) {
@@ -782,41 +747,6 @@ $('#quitar-inventario').addEventListener('click', async () => {
   pintarClubes();
 });
 
-// --- respaldo
-$('#exportar-datos').addEventListener('click', async () => {
-  const datos = await almacen.exportarTodo();
-  descargar(new Blob([JSON.stringify(datos)], { type: 'application/json' }),
-    `datos-campori-${hoy()}.json`);
-});
-$('#importar-datos').addEventListener('change', e => {
-  const archivo = e.target.files[0];
-  e.target.value = '';
-  if (!archivo) return;
-  const lector = new FileReader();
-  lector.onload = async () => {
-    try {
-      const antes = clubesCruzados().length;
-      const { nuevos, repetidos } = await almacen.importarTodo(JSON.parse(lector.result));
-      estado.todos = await almacen.todosLosEscaneos();
-      estado.fichas = await almacen.fichas();
-      if (estado.club) await recargarEscaneos();
-      pintarCruces();
-      pintarClubes();
-
-      const cruces = clubesCruzados();
-      const nuevosCruces = cruces.length - antes;
-      alert(`Importado: ${nuevos} escaneos nuevos, ${repetidos} que ya tenías.` +
-        (nuevosCruces > 0
-          ? `\n\nATENCIÓN: ${nuevosCruces} club${nuevosCruces === 1 ? '' : 'es'} quedaron con escaneos ` +
-            'de más de un teléfono. Mirá el aviso rojo acá abajo y revisá esas fichas a mano.'
-          : ''));
-    } catch (err) {
-      alert('No pude importar: ' + err.message);
-    }
-  };
-  lector.readAsText(archivo);
-});
-
 // --- este telefono
 $('#guardar-dispositivo').addEventListener('click', async () => {
   estado.dispositivo = $('#nombre-dispositivo').value.trim();
@@ -840,7 +770,7 @@ $('#borrar-todo').addEventListener('click', async () => {
   if (!confirm('Esto no se puede deshacer. ¿Seguro?')) return;
   await almacen.borrarTodo();
   estado.todos = []; estado.fichas = new Map(); estado.escaneos = [];
-  pintarCruces(); pintarClubes(); pintarDiagnostico();
+  pintarClubes(); pintarDiagnostico();
   alert('Listo, no quedan datos.');
 });
 

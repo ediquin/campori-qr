@@ -20,10 +20,8 @@
  * Por eso pueden mandar varios evaluadores a la misma planilla sin pisarse, y
  * cada uno puede reenviar las veces que quiera sin duplicar filas.
  *
- * Lo que esta planilla NO hace es mandar nada de vuelta a los telefonos. Es una
- * vista para compartir, no un lugar donde se sincronizan los datos. La union
- * completa se hace pasando el archivo de datos entre telefonos (Ajustes ->
- * Exportar / Importar), que ademas es lo unico que permite cruzar los stickers
+ * La planilla tambien responde que clubes usaron cada QR. Cada telefono consulta
+ * esa informacion con "Traer lo de los demas" para detectar un sticker repetido
  * entre clubes evaluados por personas distintas.
  */
 
@@ -178,16 +176,17 @@ function doGet(peticion) {
     return responder({ ok: false, error: 'La hoja "Detalle de escaneos" no tiene las columnas ID y Código QR' });
   }
 
-  // Devolvemos el codigo QR completo y no solo el serial: quien lee ya sabe
-  // interpretarlo, y asi el script no necesita conocer el formato.
+  // Devolvemos el codigo QR completo y TODOS los clubes donde aparece. Si un mismo
+  // QR figura en dos clubes, ambos deben quedar en conflicto y con cero puntos
+  // hasta que los responsables aclaren el incidente.
   const seriales = {};
   const clubes = {};
   for (let i = 1; i < valores.length; i++) {
     const id = String(valores[i][colId]).trim();
     const qr = String(valores[i][colQr]).trim();
     if (!id || !qr) continue;
-    // El primero que aparece se queda con el sticker; los siguientes son la trampa.
-    if (!seriales[qr]) seriales[qr] = id;
+    if (!seriales[qr]) seriales[qr] = [];
+    if (seriales[qr].indexOf(id) < 0) seriales[qr].push(id);
     clubes[id] = true;
   }
 

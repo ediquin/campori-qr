@@ -11,6 +11,8 @@
 // archivo corre dentro de Google y usa sus APIs. Lo que se prueba es la REGLA;
 // si cambia una, hay que cambiar la otra.
 
+import { normalizarSeriales, conflictosRemotosParaClub } from '../js/sheets.js';
+
 let pasadas = 0;
 const fallos = [];
 function comprobar(nombre, obtenido, esperado) {
@@ -137,6 +139,28 @@ grupo('Lo que el envio NO hace');
   };
   const sana = fusionar(planilla, buenEnvio);
   comprobar('mandando solo lo propio, el otro club queda intacto', totalDe(sana, 'C053'), 2600);
+}
+
+grupo('Un mismo sticker en dos clubes deja a ambos en conflicto');
+
+{
+  const qr = 'AV5-F03-200-0147-K7M2';
+  const remotos = normalizarSeriales({
+    [qr]: ['C012', 'C053', 'C012'],
+  });
+
+  comprobar('normaliza y elimina clubes repetidos',
+    remotos.get(qr), ['C012', 'C053']);
+  comprobar('C012 ve que el sticker tambien aparece en C053',
+    conflictosRemotosParaClub(remotos, 'C012').get(qr), 'C053');
+  comprobar('C053 ve que el sticker tambien aparece en C012',
+    conflictosRemotosParaClub(remotos, 'C053').get(qr), 'C012');
+  comprobar('un tercer club tambien ve el conflicto',
+    conflictosRemotosParaClub(remotos, 'C070').get(qr), 'C012');
+
+  const antiguo = normalizarSeriales({ [qr]: 'C012' });
+  comprobar('acepta respuestas antiguas con un solo club',
+    antiguo.get(qr), ['C012']);
 }
 
 console.log('');

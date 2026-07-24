@@ -83,47 +83,29 @@ Abrí `evaluador.html` en el celular:
 
 ### Evaluando entre varios
 
-Sí se puede, y es lo normal con 71 clubes. Hay **dos formas de juntar los datos** y
-conviene entender la diferencia:
+Google Sheets es la única vía compartida. Cada teléfono guarda primero sus escaneos
+en forma local, así que puede seguir evaluando sin señal. Cuando recupera conexión:
 
-| | Necesita internet | Qué junta |
-|---|---|---|
-| **Google Sheets** | sí | Los puntajes se ven en vivo en una planilla compartida, y cada teléfono puede traer los stickers que usaron los demás |
-| **Exportar / Importar** | no | Unión total en un teléfono: de ahí sale el Excel definitivo con absolutamente todo |
+1. **Enviar mis puntajes** publica los clubes evaluados y todo el detalle de QR.
+2. **Traer lo de los demás** actualiza la lista de stickers usados por otros clubes.
 
-Si van a tener señal, con Sheets alcanza para el día a día — **siempre que cada uno
-use "Traer lo de los demás"**. El Exportar/Importar sigue estando por si la señal
-falla, y es lo que conviene hacer al cerrar todo.
+El detalle siempre se envía: es indispensable para detectar el mismo serial en dos
+clubes. Si eso ocurre, **ninguno recibe los puntos** hasta que se aclare el incidente
+con los directores y se corrija manualmente la planilla final.
 
-Tres cosas que conviene respetar en cualquier caso:
+Tres cosas que conviene respetar:
 
 1. **Repartan los clubes de antemano**, lo más simple es por región. Cada evaluador
    toca solo sus clubes.
 2. **Pónganle nombre a cada teléfono** en `Ajustes → Este teléfono`. Queda anotado en
    cada escaneo, y así la app puede avisar si dos personas evaluaron el mismo club.
 3. **Revisen que la hora de los celulares esté bien.** La regla de "los 8 primeros
-   eventos físicos" usa la hora del escaneo; con relojes desfasados, al juntar los
-   datos el orden puede salir distinto del real.
+   eventos físicos" usa la hora del escaneo.
 
-Al final: `Ajustes → Exportar mis datos` en cada teléfono, y `Importar` todos en el
-que vaya a generar la planilla. Importar nunca borra: solo agrega lo que falta, y
-avisa si algún club quedó con escaneos de más de un teléfono.
+### Sincronización con Google Sheets
 
-Si eso pasa, el puntaje **no se infla** — el tope de 8 eventos se aplica igual sobre
-el total combinado —, pero conviene mirar esas fichas a mano.
-
-Dos detalles que sí dependen de juntar los datos:
-
-- La detección de **stickers prestados entre clubes** compara contra lo que hay en
-  *ese* teléfono. Un sticker usado en dos clubes que están en teléfonos distintos
-  recién se detecta al unir todo.
-- El Excel final sale completo solo desde el teléfono donde se importó todo.
-
-### Enviar a Google Sheets (opcional)
-
-Además del Excel, la app puede subir los puntajes a una planilla de Google. Necesita
-internet **en el momento de enviar**: se usa al final, cuando vuelve la señal. No
-cambia nada del funcionamiento sin señal.
+La app necesita internet solamente al enviar o traer información. Sin señal sigue
+escaneando, puntuando y guardando en el teléfono; la sincronización se hace después.
 
 Preparación, una sola vez:
 
@@ -136,10 +118,10 @@ Preparación, una sola vez:
 5. Copiá la dirección que termina en `/exec` y pegala en la app, en
    `Ajustes → Enviar a Google Sheets`, junto con la misma clave.
 
-Cada teléfono manda **solo los clubes que evaluó**, y en la planilla se fusionan por
-club: se reemplazan esas filas y se deja intacto todo lo demás. Por eso pueden mandar
-varios evaluadores a la misma planilla sin pisarse, y cada uno puede reenviar las
-veces que quiera sin duplicar nada. La hoja `Envíos` deja constancia de quién mandó
+Cada teléfono manda **solo los clubes que evaluó**, junto con el detalle completo de
+sus escaneos. En la planilla se fusionan por club: se reemplazan esas filas y se deja
+intacto todo lo demás. Por eso pueden mandar varios evaluadores sin pisarse y cada
+uno puede reenviar sin duplicar nada. La hoja `Envíos` deja constancia de quién mandó
 qué y cuándo.
 
 La dirección y la clave se guardan **en el teléfono**, nunca en el repositorio. Quien
@@ -147,13 +129,16 @@ tenga esa dirección puede escribir en tu planilla, así que no la publiques.
 
 #### Traer lo de los demás — no te lo saltees
 
-El botón **Traer lo de los demás** baja la lista de stickers que ya usaron los otros
-clubes. Es lo que permite detectar un sticker despegado de una ficha y pegado en
-otra cuando esos dos clubes los evaluaron personas distintas.
+El botón **Traer lo de los demás** baja la lista de stickers y todos los clubes donde
+aparece cada uno. Es lo que permite detectar un sticker despegado de una ficha y
+pegado en otra cuando esos dos clubes los evaluaron personas distintas.
 
 Sin eso, tu teléfono solo conoce las fichas que vos escaneaste, y esa trampa pasa sin
 que nadie se entere. Se hace solo al abrir la app, pero **si dejás la app abierta
 todo el día, tus datos envejecen**: tocá el botón cada tanto.
+
+Cuando un QR aparece en dos clubes, ambos quedan con ese sticker en conflicto y
+reciben 0 puntos. La decisión sobre el dueño legítimo se toma fuera de la app.
 
 En `Ajustes` te dice cuántos stickers tenés y de cuándo son.
 
@@ -215,10 +200,12 @@ campori-qr/
 │   ├── escaner.js        cámara, elección de motor, sonido y vibración
 │   ├── almacen.js        guardado local (IndexedDB)
 │   ├── exportar.js       escritor de .xlsx y CSV
+│   ├── sheets.js         envío y consulta de seriales en Google Sheets
 │   ├── generador.js      lógica del generador
 │   └── evaluador.js      lógica del evaluador
 └── herramientas/
     ├── generar-clubes.mjs  regenera clubes.js desde el Excel
+    ├── apps-script.gs       se instala dentro de la planilla de Google
     ├── servidor.mjs        servidor local para probar
     └── pruebas*.mjs        las pruebas
 ```
@@ -275,7 +262,7 @@ que el sticker quede algo arrugado o manchado.
 
 ## Las pruebas
 
-343 comprobaciones, sin framework:
+362 comprobaciones, sin framework:
 
 - **Núcleo** — la firma coincide con `crypto` de Node; se rechazan QR alterados en
   cualquier campo; el motor de puntaje cumple las reglas y detecta cada trampa.
@@ -293,6 +280,8 @@ que el sticker quede algo arrugado o manchado.
   hasta 11 bytes rotos y que **nunca inventa datos** cuando el daño la supera.
 - **Exportación** — el `.xlsx` se vuelve a abrir y se comprueba que los CRC del zip
   y los datos (acentos, comillas, números, celdas vacías) estén intactos.
+- **Google Sheets** — verifica que varios evaluadores puedan actualizar clubes
+  distintos sin pisarse y que los seriales con más de un club se conserven completos.
 - **Escenario completo** — una ficha realista del club de prueba `ediquin`, con sus
   errores y sus cinco trampas. Imprime un informe legible de qué hace el sistema en
   cada caso.

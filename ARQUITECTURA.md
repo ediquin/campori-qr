@@ -183,15 +183,14 @@ Un teléfono solo conoce las fichas que escaneó **ese** teléfono. Si el club A
 prestó un sticker al club B, y esos dos clubes los evaluaron personas distintas,
 ninguno de los dos celulares lo ve.
 
-Hay dos formas de resolverlo, y son las dos rutas de datos de la sección 7:
+La solución compartida es **Google Sheets**: cada teléfono publica el detalle de sus
+escaneos y baja la lista de todos los clubes donde aparece cada sticker
+(`?accion=seriales`). Si un serial figura en dos clubes, ambos quedan en conflicto y
+ese sticker suma 0 hasta que los responsables aclaren el incidente.
 
-- **Exportar/Importar entre teléfonos** — unión completa, sin internet.
-- **Traer de Google Sheets** — cada teléfono baja la lista de stickers ya usados por
-  los demás (`?accion=seriales`) y la usa en el motor de puntaje.
-
-Sin ninguna de las dos, esa trampa pasa. Está medido: sin traer, el club queda con
-600 puntos y cero alertas; después de traer, 400 puntos y una alerta grave que nombra
-al club que ya había usado ese sticker.
+Sin enviar y traer, esa trampa pasa. Está medido: sin traer, el club queda con 600
+puntos y cero alertas; después de traer, 400 puntos y una alerta grave que nombra al
+otro club.
 
 ---
 
@@ -271,23 +270,13 @@ Lo detectó una prueba.
 
 ---
 
-## 7. Las dos rutas de datos
+## 7. La ruta compartida de datos
 
 **No existe sincronización automática entre teléfonos.** Nunca, ni con internet. No
-hay ningún lugar donde los datos se junten solos, porque no hay backend.
+se envía información sin una acción del evaluador; los escaneos se guardan primero
+en el teléfono y Google Sheets actúa como la base compartida cuando hay conexión.
 
 ```
-RUTA A — Unión completa, sin internet
-
-   celu 1 ──archivo.json──┐
-                          ├──▶ un teléfono junta todo ──▶ Excel definitivo
-   celu 2 ──archivo.json──┘
-
-   Ajustes → Exportar mis datos / Importar datos de otro teléfono
-
-
-RUTA B — Planilla compartida, necesita internet
-
    celu 1 ──envía lo suyo──┐                    ┌──▶ celu 1 trae los seriales
                            ├──▶ Google Sheets ──┤
    celu 2 ──envía lo suyo──┘                    └──▶ celu 2 trae los seriales
@@ -295,16 +284,17 @@ RUTA B — Planilla compartida, necesita internet
    Ajustes → Enviar mis puntajes / Traer lo de los demás
 ```
 
-La ruta B originalmente era solo de ida (publicar para mirar). Se le agregó la
-lectura de seriales precisamente para que **no perdiera la detección de stickers
-prestados** cuando se la usa como ruta principal.
+Sin señal, cada teléfono continúa evaluando con IndexedDB. Al recuperar conexión,
+envía lo pendiente y trae los seriales compartidos. El detalle de escaneos es
+obligatorio: sin el QR completo no se puede detectar un sticker repetido entre
+clubes.
 
 ### Cómo conviven varios teléfonos en la misma planilla
 
 Tres decisiones que hacen que esto funcione, y las tres nacieron de un fallo real:
 
 1. **Cada teléfono manda solo los clubes que evaluó.** La versión anterior mandaba
-   los 72 del padrón; los no evaluados iban con cero y **pisaban el trabajo del otro
+   todo el padrón; los no evaluados iban con cero y **pisaban el trabajo del otro
    evaluador**. Hay una prueba que reproduce ese fallo explícitamente para que no
    vuelva.
 2. **El script fusiona por ID de club**, no reemplaza la hoja. Reemplaza las filas de
@@ -364,7 +354,7 @@ Herramientas (Node, sin dependencias)
 
 ## 9. Estrategia de pruebas
 
-`node herramientas/pruebas.mjs` — **357 comprobaciones**, sin framework.
+`node herramientas/pruebas.mjs` — **362 comprobaciones**, sin framework.
 
 El criterio: cada suite tiene que probar contra algo **independiente**, no contra sí
 misma.
@@ -375,7 +365,7 @@ misma.
 | `pruebas-qr.mjs` | Formato e información de versión contra las **tablas publicadas de ISO/IEC 18004**. Cada código se decodifica leyendo la matriz como un escáner, y se verifican los **síndromes de Reed-Solomon**: si dan cero, la corrección es matemáticamente correcta. |
 | `pruebas-decoder.mjs` | Imágenes sintéticas con degradaciones deliberadas. La perspectiva se aplica con una homografía resuelta por **eliminación gaussiana**, método distinto del que usa el lector: si compartieran implementación, un error se cancelaría. |
 | `pruebas-exportar.mjs` | El `.xlsx` se reabre y se comprueban los **CRC del ZIP** y los datos (acentos, comillas, signos de XML, números, celdas vacías). |
-| `pruebas-sheets.mjs` | La regla de fusión, incluido el caso que rompía (mandar clubes no evaluados). |
+| `pruebas-sheets.mjs` | La regla de fusión, incluido el caso que rompía (mandar clubes no evaluados), y que un serial presente en dos clubes deje a ambos en conflicto. |
 | `pruebas-escenario.mjs` | Una ficha realista del club `ediquin` con sus cinco trampas. Imprime un informe legible. |
 
 ### Fallos reales que encontraron
@@ -426,7 +416,7 @@ Si el objetivo es dar feedback, mirar acá primero:
    final es seguro; renumerar no.
 5. **La URL del Apps Script es efectivamente una contraseña.** Quien la tenga puede
    escribir en la planilla. Por eso se guarda en el teléfono y nunca en el repo.
-6. **La ruta B depende de que alguien se acuerde de "Traer lo de los demás".** Se
+6. **La ruta de Sheets depende de que alguien se acuerde de "Traer lo de los demás".** Se
    hace solo al abrir la app, pero si un evaluador la deja abierta todo el día, sus
    datos remotos envejecen. Un fallo silencioso: no se rompe nada, simplemente deja
    de detectar.

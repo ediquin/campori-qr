@@ -1,8 +1,8 @@
 // Guardado local en IndexedDB.
 //
-// Todo vive en el celular: en un campamento no hay señal confiable y una app que
-// dependa de internet se cuelga con las fichas en la mano. La sincronizacion entre
-// telefonos se hace exportando e importando un archivo (ver exportarTodo/importarTodo).
+// Todo vive primero en el celular: en un campamento no hay señal confiable y una app
+// que dependa de internet se cuelga con las fichas en la mano. Cuando hay conexion,
+// cada telefono publica sus resultados y consulta los seriales compartidos en Sheets.
 //
 // Lo unico que se guarda de cada escaneo es el texto crudo del QR y a que club se le
 // cargo. El puntaje NO se guarda: se recalcula siempre con js/puntaje.js. Asi, si hay
@@ -124,39 +124,6 @@ export async function leerAjuste(clave, porDefecto = null) {
   await abrir();
   const fila = await esperar(transaccion(['ajustes'], 'readonly').objectStore('ajustes').get(clave));
   return fila ? fila.valor : porDefecto;
-}
-
-// ------------------------------------------------------------------ respaldo y union
-
-/** Vuelca todo a un objeto plano, para respaldar o para pasarlo a otro telefono. */
-export async function exportarTodo() {
-  return {
-    formato: 'campori-qr/1',
-    exportado: new Date().toISOString(),
-    escaneos: await todosLosEscaneos(),
-    fichas: [...(await fichas()).values()],
-  };
-}
-
-/**
- * Une los datos de otro telefono con los de este. Nunca borra nada:
- * los escaneos repetidos se ignoran porque la clave club+codigo ya existe.
- * Devuelve cuantos entraron y cuantos ya estaban.
- */
-export async function importarTodo(datos) {
-  if (datos?.formato !== 'campori-qr/1') {
-    throw new Error('El archivo no tiene el formato esperado (campori-qr/1)');
-  }
-  await abrir();
-  let nuevos = 0, repetidos = 0;
-  for (const e of datos.escaneos || []) {
-    const resultado = await agregarEscaneo(e);
-    if (resultado === 'guardado') nuevos++; else repetidos++;
-  }
-  for (const f of datos.fichas || []) {
-    await marcarFicha(f.idClub, f);
-  }
-  return { nuevos, repetidos };
 }
 
 export async function borrarTodo() {

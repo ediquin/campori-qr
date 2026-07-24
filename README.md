@@ -38,7 +38,7 @@ fabricados por fuera.
 
 ```bash
 node herramientas/servidor.mjs      # http://localhost:8080
-node herramientas/pruebas.mjs       # 343 comprobaciones
+node herramientas/pruebas.mjs       # 362 comprobaciones
 node herramientas/generar-clubes.mjs  # regenera el padrón desde el Excel
 ```
 

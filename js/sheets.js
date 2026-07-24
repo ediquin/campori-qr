@@ -8,8 +8,12 @@
 // Del otro lado hay un Google Apps Script publicado como aplicacion web; el codigo
 // esta en herramientas/apps-script.gs y las instrucciones en LEEME.md.
 //
-// La URL y la clave se guardan EN EL TELEFONO (IndexedDB), nunca en el codigo: este
-// repositorio es publico y quien tenga la URL puede escribir en la planilla.
+// La URL publica del Apps Script viene preconfigurada para evitar escribirla en cada
+// telefono. La clave sigue guardandose solo EN EL TELEFONO (IndexedDB): es la que
+// autoriza realmente a leer y escribir en la planilla.
+
+export const URL_PREDETERMINADA =
+  'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
 
 /**
  * Manda las hojas a la planilla.
@@ -78,7 +82,12 @@ export async function enviar({ url, clave, dispositivo = '', clubes = '' }, hoja
  * solo conoce lo suyo y esa trampa pasa sin que nadie se entere.
  *
  * @returns {Promise<{ok: boolean, seriales?: Object, clubes?: number, error?: string}>}
- *          seriales es un objeto { "AV5-F03-200-0147-K7M2": "C012", ... }
+ *          seriales es un objeto {
+ *            "AV5-F03-200-0147-K7M2": ["C012", "C053"],
+ *            ...
+ *          }
+ *          Se conservan TODOS los clubes de cada QR. Si hay mas de uno, ninguno
+ *          recibe el puntaje hasta que el incidente se resuelva manualmente.
  */
 export async function traerSeriales(url, clave) {
   if (!url) return { ok: false, error: 'Falta la dirección del script' };
@@ -96,6 +105,36 @@ export async function traerSeriales(url, clave) {
   } catch (e) {
     return { ok: false, error: `No se pudo consultar: ${e.message}` };
   }
+}
+
+/**
+ * Convierte la respuesta de Apps Script a un Map estable.
+ * Acepta tambien el formato antiguo, que devolvia un solo club como texto.
+ */
+export function normalizarSeriales(seriales = {}) {
+  const mapa = new Map();
+  for (const [codigoQr, valor] of Object.entries(seriales || {})) {
+    const clubes = (Array.isArray(valor) ? valor : [valor])
+      .map(id => String(id || '').trim())
+      .filter(Boolean);
+    const unicos = [...new Set(clubes)];
+    if (unicos.length) mapa.set(codigoQr, unicos);
+  }
+  return mapa;
+}
+
+/**
+ * Para un club concreto, devuelve los stickers que tambien aparecen en al menos
+ * otro club. El valor es uno de los otros clubes, para nombrarlo en la alerta.
+ */
+export function conflictosRemotosParaClub(remotos, idClubActual) {
+  const conflictos = new Map();
+  for (const [idSticker, valor] of remotos || []) {
+    const clubes = Array.isArray(valor) ? valor : [valor];
+    const otro = clubes.find(id => id && id !== idClubActual);
+    if (otro) conflictos.set(idSticker, otro);
+  }
+  return conflictos;
 }
 
 /** Comprueba que el script esté publicado, sin mandar datos. */
