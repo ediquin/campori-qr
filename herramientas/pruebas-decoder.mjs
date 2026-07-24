@@ -12,9 +12,12 @@
 
 import { generarMatriz } from '../js/qr-encoder.js';
 import { corregirBloque, decodificarGris } from '../js/qr-decoder.js';
-import { calcularRecorteCentral } from '../js/escaner.js';
+import { calcularRecorteCentral, codigoMasCercano } from '../js/escaner.js';
 import { polinomioGenerador, mul } from '../js/galois.js';
 import { armarSticker, armarQrClub } from '../js/codigo.js';
+import {
+  PUNTOS_EVENTO, EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES,
+} from '../js/catalogo.js';
 
 let pasadas = 0;
 const fallos = [];
@@ -26,7 +29,7 @@ const grupo = t => console.log(`\n--- ${t}`);
 
 // ============================================================ Mira central
 
-grupo('La cámara ignora los QR que quedan alrededor de la mira');
+grupo('La cámara prioriza la mira sin perder los bordes');
 
 {
   const redondear = r => Object.fromEntries(
@@ -35,14 +38,22 @@ grupo('La cámara ignora los QR que quedan alrededor de la mira');
   comprobar(
     'video 16:9 mostrado en 4:3: recorta el centro que realmente se ve',
     redondear(calcularRecorteCentral(1280, 720, 640, 480)),
-    { x: 400, y: 180, ancho: 480, alto: 360 }
+    { x: 275.2, y: 86.4, ancho: 729.6, alto: 547.2 }
   );
   comprobar(
-    'video y pantalla 4:3: la mira ocupa la mitad central',
+    'video y pantalla 4:3: la mira ocupa una zona central amplia',
     redondear(calcularRecorteCentral(640, 480, 640, 480)),
-    { x: 160, y: 120, ancho: 320, alto: 240 }
+    { x: 76.8, y: 57.6, ancho: 486.4, alto: 364.8 }
   );
   comprobar('dimensiones inválidas no producen un recorte', calcularRecorteCentral(0, 0), null);
+
+  const codigos = [
+    { rawValue: 'izquierda', boundingBox: { x: 10, y: 40, width: 30, height: 30 } },
+    { rawValue: 'centro', boundingBox: { x: 135, y: 85, width: 30, height: 30 } },
+    { rawValue: 'derecha', boundingBox: { x: 260, y: 40, width: 30, height: 30 } },
+  ];
+  comprobar('si ve varios QR elige el más cercano al centro',
+    codigoMasCercano(codigos, 150, 100)?.rawValue, 'centro');
 }
 
 // Generador de numeros pseudoaleatorios con semilla, para que las pruebas den
@@ -353,6 +364,20 @@ const matriz = generarMatriz(TEXTO, { nivel: 'Q' });
     if (leer(dibujar(generarMatriz(texto, { nivel: 'Q' }), 8))?.texto === texto) ok++;
   }
   comprobar(`los codigos reales se leen (${ok}/${casos.length})`, ok, casos.length);
+}
+
+{
+  // Garantía previa a imprimir: todos los eventos actuales producen un símbolo
+  // que el mismo lector usado por los iPhone puede recuperar por completo.
+  const eventos = [...EVENTOS_FISICOS, ...EVENTOS_ESPIRITUALES, ...CRITERIOS_ADICIONALES];
+  let ok = 0;
+  for (let i = 0; i < eventos.length; i++) {
+    const evento = eventos[i];
+    const puntos = evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO;
+    const texto = armarSticker(evento.codigo, puntos, 5000 + i);
+    if (leer(dibujar(generarMatriz(texto, { nivel: 'Q' }), 8))?.texto === texto) ok++;
+  }
+  comprobar(`todos los QR de eventos actuales se leen (${ok}/${eventos.length})`, ok, eventos.length);
 }
 
 // ============================================================ degradaciones

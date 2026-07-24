@@ -4,7 +4,7 @@ import { CAMPORI, REGLAS, TOPE_FISICO, TOPE_ESPIRITUAL, etiquetaTipo } from './c
 import { CLUBES, buscarClub } from './clubes.js';
 import { leerQr } from './codigo.js';
 import { calcular, ESTADOS } from './puntaje.js';
-import { Escaner, VERSION_LECTOR, pitido, vibrar, activarSonido } from './escaner.js?v=3';
+import { Escaner, VERSION_LECTOR, pitido, vibrar, activarSonido } from './escaner.js?v=4';
 import { aXlsx, aCsv, descargar } from './exportar.js';
 import * as sheets from './sheets.js';
 import * as almacen from './almacen.js';
@@ -70,9 +70,9 @@ function idDeSticker(crudo) {
 
 function resultadoDe(idClub, escaneos) {
   return calcular(escaneos, {
-    // En el modo actual todo QR firmado por el generador queda autorizado. La
-    // unicidad se controla por serial localmente y mediante Google Sheets.
-    inventario: REGLAS.inventarioAutomatico ? null : estado.inventario,
+    // El inventario está desactivado de forma deliberada: ningún QR válido del
+    // generador se rechaza por pertenecer a una tanda distinta.
+    inventario: null,
     usadosPorOtros: usadosPorOtros(idClub),
   });
 }

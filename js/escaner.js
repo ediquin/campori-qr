@@ -14,14 +14,14 @@
 
 import { decodificar } from './qr-decoder.js';
 
-export const VERSION_LECTOR = '3 · mira central';
+export const VERSION_LECTOR = '4 · rápido y tolerante';
 
 // Con el lector propio conviene trabajar sobre una imagen mas chica que la del video:
 // alcanza y sobra para un codigo que ocupa buena parte del cuadro, y baja mucho el
 // costo por cuadro. A 480 de ancho un sticker que ocupe un tercio de la pantalla
 // deja unos 5 pixeles por modulo, de sobra para leerlo.
 const ANCHO_ANALISIS = 480;
-const MARGEN_MIRA = 0.25;
+const MARGEN_MIRA = 0.12;
 
 /**
  * Traduce el recuadro visible de la cámara a coordenadas del video original.
@@ -48,6 +48,21 @@ export function calcularRecorteCentral(vw, vh, anchoVista = vw, altoVista = vh, 
     ancho: visibleW * (1 - margen * 2),
     alto: visibleH * (1 - margen * 2),
   };
+}
+
+/** Elige el QR más cercano a la mira cuando el navegador ve varios a la vez. */
+export function codigoMasCercano(codigos, cx, cy) {
+  if (!codigos?.length) return null;
+  return [...codigos].sort((a, b) => {
+    const distancia = codigo => {
+      const caja = codigo.boundingBox;
+      if (!caja) return Number.POSITIVE_INFINITY;
+      const dx = caja.x + caja.width / 2 - cx;
+      const dy = caja.y + caja.height / 2 - cy;
+      return dx * dx + dy * dy;
+    };
+    return distancia(a) - distancia(b);
+  })[0] || null;
 }
 
 export class Escaner {
@@ -101,11 +116,12 @@ export class Escaner {
     if (this.motor === 'navegador') {
       this.detector = new window.BarcodeDetector({ formats: ['qr_code'] });
     }
-    // Los dos motores analizan un canvas recortado. Esto es imprescindible cuando
-    // una ficha muestra varios stickers: solo debe entrar el QR que está dentro de
-    // la mira central, no cualquiera que aparezca en una esquina de la cámara.
-    this.lienzo = document.createElement('canvas');
-    this.contexto = this.lienzo.getContext('2d', { willReadFrequently: true });
+    // El lector propio necesita un canvas. El lector nativo trabaja directamente
+    // sobre el video: conserva toda la resolución y evita una copia por cuadro.
+    if (this.motor === 'propio') {
+      this.lienzo = document.createElement('canvas');
+      this.contexto = this.lienzo.getContext('2d', { willReadFrequently: true });
+    }
 
     const video = idCamara
       ? { deviceId: { exact: idCamara } }
@@ -164,6 +180,25 @@ export class Escaner {
   async _leerCuadro() {
     const vw = this.video.videoWidth, vh = this.video.videoHeight;
     if (!vw || !vh) return null;
+
+    if (this.motor === 'navegador') {
+      // Esta era la ruta rápida original. BarcodeDetector recibe el video completo
+      // con su resolución real; si aparecen varios QR elegimos el más centrado.
+      const codigos = await this.detector.detect(this.video);
+      const visible = calcularRecorteCentral(
+        vw, vh,
+        this.video.clientWidth || vw,
+        this.video.clientHeight || vh,
+        0
+      );
+      const elegido = codigoMasCercano(
+        codigos,
+        visible ? visible.x + visible.ancho / 2 : vw / 2,
+        visible ? visible.y + visible.alto / 2 : vh / 2
+      );
+      return elegido?.rawValue?.trim() || null;
+    }
+
     const recorte = calcularRecorteCentral(
       vw, vh,
       this.video.clientWidth || vw,
@@ -171,6 +206,21 @@ export class Escaner {
     );
     if (!recorte) return null;
 
+    // Primero miramos una zona central amplia para no elegir un sticker vecino.
+    // Si no aparece nada, repetimos sobre todo el campo visible: así un QR válido
+    // no se pierde solamente porque quedó rozando el borde de la mira.
+    const central = this._leerRecorte(recorte);
+    if (central) return central;
+    const completo = calcularRecorteCentral(
+      vw, vh,
+      this.video.clientWidth || vw,
+      this.video.clientHeight || vh,
+      0
+    );
+    return completo ? this._leerRecorte(completo) : null;
+  }
+
+  _leerRecorte(recorte) {
     const escala = Math.min(1, ANCHO_ANALISIS / recorte.ancho);
     const w = Math.round(recorte.ancho * escala);
     const h = Math.round(recorte.alto * escala);
@@ -183,26 +233,6 @@ export class Escaner {
       recorte.x, recorte.y, recorte.ancho, recorte.alto,
       0, 0, w, h
     );
-
-    if (this.motor === 'navegador') {
-      const codigos = await this.detector.detect(this.lienzo);
-      if (!codigos.length) return null;
-      // Si aun entran dos códigos parcialmente, elegimos el más cercano al centro
-      // de la mira en vez de confiar en el orden arbitrario del navegador.
-      const cx = w / 2, cy = h / 2;
-      codigos.sort((a, b) => {
-        const distancia = codigo => {
-          const caja = codigo.boundingBox;
-          if (!caja) return Number.POSITIVE_INFINITY;
-          const dx = caja.x + caja.width / 2 - cx;
-          const dy = caja.y + caja.height / 2 - cy;
-          return dx * dx + dy * dy;
-        };
-        return distancia(a) - distancia(b);
-      });
-      return codigos[0]?.rawValue?.trim() || null;
-    }
-
     const imagen = this.contexto.getImageData(0, 0, w, h);
     return decodificar(imagen.data, w, h)?.texto?.trim() || null;
   }

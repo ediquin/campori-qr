@@ -6,7 +6,10 @@
 // tiene que poder correrse en cualquier maquina con node, sin instalar nada.
 
 import crypto from 'crypto';
-import { CAMPORI, PUNTOS_EVENTO, TOPE_BASE } from '../js/catalogo.js';
+import {
+  CAMPORI, REGLAS, PUNTOS_EVENTO, TOPE_BASE,
+  EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES,
+} from '../js/catalogo.js';
 import { firmar, armarSticker, armarQrClub, leerQr } from '../js/codigo.js';
 import { calcular } from '../js/puntaje.js';
 
@@ -86,6 +89,23 @@ grupo('Club que hace todo bien');
   comprobar('el total base es 3000', r.total, 3000);
   comprobar('queda marcado como completo', r.completo, true);
   comprobar('sin alertas', r.alertas.length, 0);
+}
+
+grupo('Modo operativo sin inventario');
+
+{
+  const eventos = [...EVENTOS_FISICOS, ...EVENTOS_ESPIRITUALES, ...CRITERIOS_ADICIONALES];
+  const estados = eventos.map((evento, i) => {
+    const puntos = evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO;
+    return calcular([sticker(evento.codigo, puntos, 6000 + i)]).detalle[0].estado;
+  });
+  comprobar('el inventario automático está activado', REGLAS.inventarioAutomatico, true);
+  comprobar('todos los QR actuales se aceptan sin inventario',
+    estados.every(estado => estado === 'contado'), true);
+
+  const uno = sticker('F01', PUNTOS_EVENTO, 6999);
+  comprobar('el sticker idéntico repetido se bloquea',
+    calcular([uno, { ...uno }]).detalle[1].estado, 'serial_repetido');
 }
 
 grupo('Regla de los 8 eventos fisicos');
