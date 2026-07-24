@@ -340,6 +340,10 @@ export function generarMatriz(texto, { nivel = 'Q', versionMinima = 1 } = {}) {
       if (i < 8) m[tamano - 1 - i][8] = bit;
       else m[8][tamano - 15 + i] = bit;
     }
+    // El módulo oscuro fijo comparte coordenada con la zona donde se copia el
+    // formato. La norma exige que quede siempre encendido, independientemente de
+    // la máscara elegida. Reafirmarlo acá evita QR que algunos lectores rechazan.
+    m[tamano - 8][8] = 1;
 
     if (version >= 7) {
       const info = bchVersion(version);

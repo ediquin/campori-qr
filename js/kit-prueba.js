@@ -7,72 +7,59 @@ import {
 } from './catalogo.js';
 import { armarSticker } from './codigo.js';
 import { generarMatriz, matrizASvg } from './qr-encoder.js';
+import { crearIdentificador } from './identificador.js';
 import { calcular } from './puntaje.js';
 
 const $ = s => document.querySelector(s);
 const escapar = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const svgDe = (texto, lado) => matrizASvg(generarMatriz(texto, { nivel: 'Q' }), { lado, margen: 4 });
+const svgDe = (texto, lado) =>
+  matrizASvg(generarMatriz(texto, { nivel: 'H', versionMinima: 2 }), { lado, margen: 4 });
 
-const AJUSTE_TANDA = 'campori-kit-tanda-v1';
+const serialesDeEstaPagina = new Set();
 
-function crearBaseTanda(anterior = null) {
-  let numero;
-  try {
-    const bytes = new Uint16Array(1);
-    crypto.getRandomValues(bytes);
-    numero = bytes[0];
-  } catch {
-    numero = Date.now();
-  }
-  let base = 7000 + (numero % 1500); // 7000–8499: fuera de las tandas normales.
-  if (base === anterior) base = 7000 + ((base - 6999) % 1500);
-  sessionStorage.setItem(AJUSTE_TANDA, String(base));
-  return base;
+function serialUnico(codigo) {
+  return crearIdentificador(serialesDeEstaPagina, codigo);
 }
 
-function leerBaseTanda() {
-  const guardada = Number(sessionStorage.getItem(AJUSTE_TANDA));
-  return guardada >= 7000 && guardada <= 8499 ? guardada : crearBaseTanda();
-}
-
-let baseTanda = leerBaseTanda();
+let idTanda = crearIdentificador(new Set(), '', 5);
 
 // ------------------------------------------------------------------ el guion
 
 // Cada entrada es un sticker del kit. `esperado` es lo que tiene que pasar al
 // escanearlo, y se usa tanto para el rotulo impreso como para la comprobacion
 // automatica que corre esta misma pagina.
-function crearGuion(base) {
+function crearGuion() {
   // La tanda es independiente del club. Es el mismo modelo de los stickers reales:
   // cualquiera puede recibirlos, pero cada ejemplar solo puede usarse una vez.
   return [
     ...EVENTOS_FISICOS.slice(0, 8).map((e, i) => ({
-      codigo: e.codigo, serial: base + i, grupo: 'Los 8 eventos físicos',
+      codigo: e.codigo, serial: serialUnico(e.codigo), grupo: 'Los 8 eventos físicos',
       esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
     })),
     {
-      codigo: 'F03', serial: base + 100, grupo: 'Trampas',
+      codigo: 'F03', serial: serialUnico('F03'), grupo: 'Trampas',
       esperado: 'repetido', nota: 'Evento repetido: no suma',
       explicacion: 'Es otro sticker de un evento que el club ya hizo. La app lo marca en rojo.',
     },
     {
-      codigo: 'F09', serial: base + 8, grupo: 'Trampas',
+      codigo: 'F09', serial: serialUnico('F09'), grupo: 'Trampas',
       esperado: 'excedente', nota: 'Noveno físico: no suma',
       explicacion: 'Pasado el cupo de 8, la app avisa y no lo cuenta.',
     },
     ...EVENTOS_ESPIRITUALES.map((e, i) => ({
-      codigo: e.codigo, serial: base + i, grupo: 'Los 7 espirituales (obligatorios)',
+      codigo: e.codigo, serial: serialUnico(e.codigo), grupo: 'Los 7 espirituales (obligatorios)',
       esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
     })),
     {
-      codigo: CRITERIOS_ADICIONALES[0].codigo, serial: base,
+      codigo: CRITERIOS_ADICIONALES[0].codigo,
+      serial: serialUnico(CRITERIOS_ADICIONALES[0].codigo),
       grupo: 'Puntaje adicional', esperado: 'contado',
       nota: `+${CRITERIOS_ADICIONALES[0].puntos}`,
     },
   ];
 }
 
-let GUION = crearGuion(baseTanda);
+let GUION = crearGuion();
 
 // ------------------------------------------------------------------ resultado esperado
 
@@ -106,10 +93,10 @@ function hojaStickers() {
         const trampa = s.esperado !== 'contado';
         return `<div class="sticker-kit${trampa ? ' trampa' : ''}"
           role="button" tabindex="0" title="Tocar para ampliar este QR">
-          ${svgDe(armarSticker(s.codigo, puntos, s.serial), 24)}
+          ${svgDe(armarSticker(s.codigo, puntos, s.serial), 26)}
           <div class="rotulo-kit">
             <strong>${s.codigo}</strong> · ${escapar(evento.nombre)}<br>
-            <span class="serial-kit">serial ${String(s.serial).padStart(4, '0')}</span><br>
+            <span class="serial-kit">id ${s.serial}</span><br>
             <span class="${trampa ? 'esperado-trampa' : 'esperado-ok'}">${escapar(s.nota)}</span>
           </div>
         </div>`;
@@ -146,7 +133,7 @@ function pintarGuion() {
       ${GUION.filter(s => s.explicacion).map(s => {
         const evento = buscarEvento(s.codigo);
         return `<tr><td><span class="mono">${s.codigo}</span> ${escapar(evento.nombre)}
-          <span class="tenue chico">serial ${String(s.serial).padStart(4, '0')}</span></td>
+          <span class="tenue chico">id ${s.serial}</span></td>
           <td><span class="pastilla alerta">${escapar(s.nota)}</span><br>
           <span class="tenue chico">${escapar(s.explicacion)}</span></td></tr>`;
       }).join('')}
@@ -161,12 +148,12 @@ function pintarGuion() {
 function pintarKit() {
   pintarGuion();
   $('#salida').innerHTML = hojaStickers();
-  $('#tanda-kit').textContent = String(baseTanda).padStart(4, '0');
+  $('#tanda-kit').textContent = idTanda;
 }
 
 $('#nueva-tanda').addEventListener('click', () => {
-  baseTanda = crearBaseTanda(baseTanda);
-  GUION = crearGuion(baseTanda);
+  idTanda = crearIdentificador(new Set(), '', 5);
+  GUION = crearGuion();
   pintarKit();
 });
 

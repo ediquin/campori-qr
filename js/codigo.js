@@ -1,23 +1,17 @@
 // Formato de los codigos QR, y su firma.
 //
-// Sticker de evento:  AV5-F03-200-0147-K7M2
-//                     |   |   |   |    +-- firma (4 caracteres)
-//                     |   |   |   +------- serial correlativo del sticker
-//                     |   |   +----------- puntos
-//                     |   +--------------- codigo del evento
-//                     +------------------- prefijo del campori
+// Sticker de evento actual:  F03-7K9M2Q8R
+//                            |   +------- identificador aleatorio unico
+//                            +----------- codigo del evento
 //
 // QR de club (va en la cabecera de la ficha):  AV5-CLUB-C012-K7M2
 //
-// Todos los caracteres estan dentro del juego alfanumerico del estandar QR
-// (0-9, A-Z y el guion), lo que permite codificarlos en la version 2 del simbolo:
-// 25x25 modulos. Impreso a 25 mm da 1 mm por modulo, que cualquier camara de
-// celular lee sin esfuerzo aunque el sticker quede algo arrugado.
+// El contenido es corto y se imprime en versión 2 con corrección H. Conservamos el
+// patrón de alineación de esa versión porque el lector propio resiste mucho mejor
+// cuando el teléfono está inclinado. También se aceptan los QR firmados antiguos.
 //
-// Sobre la firma: no pretende ser inviolable. Cualquiera con el codigo fuente puede
-// generar un QR valido. En el modo operativo actual se prioriza no depender de un
-// archivo de inventario; las defensas principales son la firma y detectar seriales
-// repetidos dentro de una ficha o entre clubes.
+// Los stickers nuevos no llevan firma. Por decisión operativa importa que sean
+// pequeños, rápidos de leer y únicos; no se intenta impedir que alguien los copie.
 
 import { CAMPORI } from './catalogo.js';
 
@@ -143,8 +137,10 @@ function firmasIguales(a, b) {
 // ------------------------------------------------------------------ armado y lectura
 
 export function armarSticker(codigoEvento, puntos, serial) {
-  const cuerpo = `${CAMPORI.prefijo}-${codigoEvento}-${puntos}-${String(serial).padStart(4, '0')}`;
-  return `${cuerpo}-${firmar(cuerpo)}`;
+  // `puntos` se conserva en la firma de la funcion para no romper las llamadas
+  // existentes, pero el valor oficial se toma siempre del catalogo.
+  const id = String(serial).toUpperCase().padStart(8, '0');
+  return `${codigoEvento}-${id}`;
 }
 
 export function armarQrClub(idClub) {
@@ -177,27 +173,55 @@ function interpretar(texto) {
   if (!crudo) return { ok: false, motivo: 'vacio', crudo };
 
   const partes = crudo.split('-');
+
+  // Formato operativo mínimo.
+  if (partes.length === 2) {
+    const [codigo, serial] = partes;
+    if (!/^[A-Z][0-9]{2}$/.test(codigo) || !/^[0-9A-Z]{8}$/.test(serial)) {
+      return { ok: false, motivo: 'formato', crudo, detalle: 'Estructura desconocida' };
+    }
+    return {
+      ok: true, clase: 'sticker', codigo, puntos: null, serial,
+      id: `${codigo}-${serial}`, crudo,
+    };
+  }
+
   if (partes[0] !== CAMPORI.prefijo) {
     return { ok: false, motivo: 'ajeno', crudo, detalle: 'No es un QR de este campori' };
   }
 
-  const firmaRecibida = partes[partes.length - 1];
-  const cuerpo = partes.slice(0, -1).join('-');
-  if (!firmasIguales(firmar(cuerpo), firmaRecibida)) {
-    return { ok: false, motivo: 'firma', crudo, detalle: 'Firma invalida: el QR no lo generamos nosotros' };
-  }
-
-  if (partes[1] === 'CLUB' && partes.length === 4) {
-    return { ok: true, clase: 'club', idClub: partes[2], crudo };
-  }
-
-  if (partes.length === 5) {
-    const [, codigo, puntos, serial] = partes;
-    const n = Number(puntos);
-    if (!Number.isInteger(n) || n <= 0) {
-      return { ok: false, motivo: 'formato', crudo, detalle: 'Puntaje ilegible' };
+  // Compatibilidad con el primer formato corto usado durante las pruebas.
+  if (partes.length === 3) {
+    const [, codigo, serial] = partes;
+    if (!/^[A-Z][0-9]{2}$/.test(codigo) || !/^[0-9A-Z]{4,10}$/.test(serial)) {
+      return { ok: false, motivo: 'formato', crudo, detalle: 'Estructura desconocida' };
     }
-    return { ok: true, clase: 'sticker', codigo, puntos: n, serial, id: `${codigo}-${serial}`, crudo };
+    return {
+      ok: true, clase: 'sticker', codigo, puntos: null, serial,
+      id: `${codigo}-${serial}`, crudo,
+    };
+  }
+
+  // Compatibilidad con los QR anteriores que sí llevaban firma.
+  if (partes.length === 4 || partes.length === 5) {
+    const firmaRecibida = partes[partes.length - 1];
+    const cuerpo = partes.slice(0, -1).join('-');
+    if (!firmasIguales(firmar(cuerpo), firmaRecibida)) {
+      return { ok: false, motivo: 'firma', crudo, detalle: 'Firma invalida' };
+    }
+
+    if (partes[1] === 'CLUB' && partes.length === 4) {
+      return { ok: true, clase: 'club', idClub: partes[2], crudo };
+    }
+
+    if (partes.length === 5) {
+      const [, codigo, puntos, serial] = partes;
+      const n = Number(puntos);
+      if (!Number.isInteger(n) || n <= 0) {
+        return { ok: false, motivo: 'formato', crudo, detalle: 'Puntaje ilegible' };
+      }
+      return { ok: true, clase: 'sticker', codigo, puntos: n, serial, id: `${codigo}-${serial}`, crudo };
+    }
   }
 
   return { ok: false, motivo: 'formato', crudo, detalle: 'Estructura desconocida' };

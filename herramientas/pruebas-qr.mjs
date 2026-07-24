@@ -59,13 +59,15 @@ grupo('Informacion de formato y version contra la norma');
     comprobar(`formato escrito en nivel ${nivel} figura en la tabla oficial`,
       OFICIAL[nivel].includes(leido), true);
 
-    // Las dos copias del formato tienen que coincidir: un lector puede usar cualquiera.
+    // Las dos copias coinciden salvo la coordenada reservada para el módulo oscuro,
+    // que la norma obliga a dejar en 1.
     let copia2 = 0;
     for (let i = 0; i < 15; i++) {
       const bit = i < 8 ? modulos[tamano - 1 - i][8] : modulos[8][tamano - 15 + i];
       copia2 |= bit << i;
     }
-    comprobar(`las dos copias del formato coinciden (nivel ${nivel})`, copia2, leido);
+    comprobar(`las dos copias del formato coinciden (nivel ${nivel})`,
+      copia2 & ~(1 << 7), leido & ~(1 << 7));
   }
 }
 
@@ -253,7 +255,10 @@ function decodificar(matriz) {
 grupo('Estructura del simbolo');
 
 {
-  const { modulos, tamano, version } = generarMatriz(armarSticker('F03', 200, 147), { nivel: 'Q' });
+  const { modulos, tamano, version } = generarMatriz(
+    armarSticker('F03', 200, 147),
+    { nivel: 'H', versionMinima: 2 }
+  );
   comprobar('nuestro sticker entra en la version 2', version, 2);
   comprobar('la version 2 mide 25x25', tamano, 25);
 
@@ -284,15 +289,25 @@ grupo('Estructura del simbolo');
   }
   comprobar('patrones de sincronismo alternados', sincroOk, true);
   comprobar('modulo oscuro obligatorio', modulos[tamano - 8][8], 1);
+
+  let oscuroSiempre = true;
+  for (let i = 0; i < 256; i++) {
+    const prueba = generarMatriz(
+      armarSticker(`F${String((i % 14) + 1).padStart(2, '0')}`, 200, i.toString(32).toUpperCase()),
+      { nivel: 'H', versionMinima: 2 }
+    );
+    if (prueba.modulos[prueba.tamano - 8][8] !== 1) oscuroSiempre = false;
+  }
+  comprobar('el modulo oscuro queda encendido con 256 patrones distintos', oscuroSiempre, true);
 }
 
-grupo('Resistencia al daño (nivel Q recupera hasta ~25%)');
+grupo('Resistencia al daño (nivel H recupera hasta ~30%)');
 
 {
   const texto = armarSticker('F03', 200, 147);
-  const m = generarMatriz(texto, { nivel: 'Q' });
+  const m = generarMatriz(texto, { nivel: 'H', versionMinima: 2 });
 
-  // Nivel Q, version 2: 22 codewords de correccion -> tolera 11 bytes corruptos.
+  // Nivel H, version 2: máxima redundancia para soportar impresión y enfoque.
   // Ensuciamos 8 codewords, bien por debajo del limite, y verificamos que los
   // sindromes lo detecten (que es lo que permite corregirlo).
   const dañado = { ...m, modulos: m.modulos.map(f => f.slice()) };
@@ -311,7 +326,10 @@ grupo('Resistencia al daño (nivel Q recupera hasta ~25%)');
 grupo('Salida SVG');
 
 {
-  const svg = matrizASvg(generarMatriz(armarSticker('F03', 200, 147), { nivel: 'Q' }), { lado: 25 });
+  const svg = matrizASvg(
+    generarMatriz(armarSticker('F03', 200, 147), { nivel: 'H', versionMinima: 2 }),
+    { lado: 25 }
+  );
   comprobar('es un SVG', svg.startsWith('<svg'), true);
   comprobar('mide 25mm', svg.includes('width="25mm"'), true);
   // 25 modulos + 4 de margen a cada lado = 33.

@@ -50,18 +50,13 @@ Más abajo, `CRITERIOS_ADICIONALES` son de ejemplo. Reemplazalos por los reales
 
 Abrí `generador.html`:
 
-1. **Hojas de stickers.** Elegí los eventos y cuántos por evento (80 alcanza:
-   son 71 clubes). Cada hoja A4 trae 63 stickers de 24 mm de un mismo evento,
-   listos para recortar y darle al juez de esa estación.
-2. **Fichas de evaluación.** Una hoja por club, con su QR en la cabecera.
-
-El generador recuerda automáticamente los seriales en ese navegador y permite
-descargar un inventario como respaldo. El evaluador está en modo automático y no
-exige cargarlo en los teléfonos. El respaldo solo hace falta para continuar la
-numeración si se cambia de computadora o de navegador.
+Elegí los eventos y cuántos QR necesitás por evento (80 alcanza: son 71 clubes).
+Cada hoja A4 trae 56 stickers de 26 mm de un mismo evento, listos para recortar y
+darle al juez de esa estación. La página no genera fichas ni pide inventarios.
+Cada nueva generación crea identificadores aleatorios distintos.
 
 Papel: cualquier hoja autoadhesiva A4. Imprimí **al 100%, sin "ajustar a página"**,
-o los 24 mm dejan de ser 24 mm.
+o los 26 mm dejan de ser 26 mm.
 
 ### 3. Durante el campamento
 
@@ -178,7 +173,7 @@ un poco más.
 ```
 campori-qr/
 ├── index.html            menú y explicación
-├── generador.html        imprime stickers y fichas
+├── generador.html        genera e imprime QR de eventos
 ├── evaluador.html        app de escaneo
 ├── prueba-camara.html    para verificar la cámara de cada celular
 ├── sw.js                 hace que funcione sin señal
@@ -236,30 +231,22 @@ texto del QR y a qué club se le cargó. El puntaje se recalcula siempre con
 `js/puntaje.js`. Si hay que corregir una regla a mitad del campori, se cambia ahí y
 todos los resultados se rehacen solos, sin tocar los datos.
 
-**Qué lleva cada QR.** `AV5-F03-200-0147-K7M2`: prefijo del campori, código del
-evento, puntos, serial único y firma. Un QR que solo dijera "200" sería inútil —
-cualquiera lo genera en diez segundos y, peor, no habría forma de saber de qué
-evento vino, que es justo lo que hace falta para detectar repetidos.
+**Qué lleva cada QR.** `F03-7K9M2Q8R`: código del evento e identificador aleatorio
+único. El puntaje no viaja en el QR: se obtiene del catálogo de la aplicación.
 
 **Por qué el serial.** Es lo que convierte cada sticker en una pieza única. Sin él
 se puede detectar un evento repetido, pero no una fotocopia ni un sticker prestado
 entre clubes.
 
-**Sobre la firma.** Es HMAC-SHA256 truncada. El modo operativo actual acepta
-automáticamente cualquier QR con firma válida y evento conocido, sin inventario
-manual. Esto agiliza la preparación, pero renuncia a distinguir un serial firmado
-que nunca salió de la impresión oficial.
-
-**Por qué 24 mm.** El código entra en un símbolo QR versión 2 (25×25 módulos) con
-corrección de error nivel Q, que tolera hasta un 25% de daño. A 24 mm cada módulo
-mide 0,73 mm: más que suficiente para la cámara de un celular, y con margen para
-que el sticker quede algo arrugado o manchado.
+**Por qué 26 mm.** El código se imprime como QR versión 2 (25×25 módulos), con
+corrección de error nivel H y el módulo oscuro obligatorio validado. Es la máxima
+redundancia disponible y conserva el patrón de alineación para leerlo inclinado.
 
 ---
 
 ## Las pruebas
 
-365 comprobaciones, sin framework:
+368 comprobaciones, sin framework:
 
 - **Núcleo** — la firma coincide con `crypto` de Node; se rechazan QR alterados en
   cualquier campo; el motor de puntaje cumple las reglas y detecta cada trampa.

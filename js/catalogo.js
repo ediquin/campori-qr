@@ -5,10 +5,9 @@
 // asi que agregá eventos nuevos al final en vez de renumerar los existentes.
 
 export const CAMPORI = {
-  prefijo: 'AV5',                    // va en cada QR; distingue estos stickers de cualquier otro
+  prefijo: 'AV5',                    // compatibilidad con los QR antiguos
   nombre: 'Campori de Aventureros',
-  // Clave de firma de los QR. Cambiala por una propia ANTES de imprimir los stickers.
-  // No es secreto militar, pero evita aceptar QR casuales o de otros eventos.
+  // Solo se usa para seguir leyendo los QR firmados del formato anterior.
   clave: 'aventuri-2026-de-vuelta-a-casa',
 };
 
@@ -23,10 +22,6 @@ export const REGLAS = {
   // Un mismo criterio adicional puede sumar mas de una vez (ej. limpieza revisada
   // cada dia). Poné false si querés que cada criterio sume una sola vez por club.
   adicionalesRepetibles: true,
-  // Modo operativo rapido: cualquier QR con firma valida y evento conocido se
-  // considera autorizado, sin cargar archivos de inventario en cada telefono.
-  // Poner false solo si se vuelve a implementar el flujo de inventario estricto.
-  inventarioAutomatico: true,
 };
 
 export const EVENTOS_FISICOS = [

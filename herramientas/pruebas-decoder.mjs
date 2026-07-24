@@ -327,7 +327,7 @@ const leer = img => decodificarGris(img.gris, img.ancho, img.alto);
 grupo('Imagen limpia');
 
 const TEXTO = armarSticker('F03', 200, 147);
-const matriz = generarMatriz(TEXTO, { nivel: 'Q' });
+const matriz = generarMatriz(TEXTO, { nivel: 'H', versionMinima: 2 });
 
 {
   for (const escala of [3, 4, 6, 8, 12, 20]) {
@@ -336,7 +336,7 @@ const matriz = generarMatriz(TEXTO, { nivel: 'Q' });
   }
   const r = leer(dibujar(matriz, 8));
   comprobar('detecta la version', r?.version, 2);
-  comprobar('detecta el nivel de correccion', r?.nivel, 'Q');
+  comprobar('detecta el nivel de correccion', r?.nivel, 'H');
   comprobar('sin errores que corregir', r?.bytesCorregidos, 0);
 }
 
@@ -361,7 +361,8 @@ const matriz = generarMatriz(TEXTO, { nivel: 'Q' });
   ];
   let ok = 0;
   for (const texto of casos) {
-    if (leer(dibujar(generarMatriz(texto, { nivel: 'Q' }), 8))?.texto === texto) ok++;
+    const nivel = texto.includes('-CLUB-') ? 'Q' : 'H';
+    if (leer(dibujar(generarMatriz(texto, { nivel, versionMinima: 2 }), 8))?.texto === texto) ok++;
   }
   comprobar(`los codigos reales se leen (${ok}/${casos.length})`, ok, casos.length);
 }
@@ -375,7 +376,7 @@ const matriz = generarMatriz(TEXTO, { nivel: 'Q' });
     const evento = eventos[i];
     const puntos = evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO;
     const texto = armarSticker(evento.codigo, puntos, 5000 + i);
-    if (leer(dibujar(generarMatriz(texto, { nivel: 'Q' }), 8))?.texto === texto) ok++;
+    if (leer(dibujar(generarMatriz(texto, { nivel: 'H', versionMinima: 2 }), 8))?.texto === texto) ok++;
   }
   comprobar(`todos los QR de eventos actuales se leen (${ok}/${eventos.length})`, ok, eventos.length);
 }
@@ -482,7 +483,7 @@ grupo('Degradaciones combinadas (lo que pasa de verdad)');
 }
 
 {
-  // Sticker rayado o con una esquina despegada: para eso esta el nivel Q.
+  // Sticker rayado o con una esquina despegada: para eso esta el nivel H.
   const img = base();
   const azar = aleatorio(4242);
   const rayado = { ...img, gris: Uint8Array.from(img.gris) };

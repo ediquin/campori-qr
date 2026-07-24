@@ -19,7 +19,6 @@ export const ESTADOS = {
   excedente: { etiqueta: 'Fuera de los 8', nivel: 'aviso' },
   serial_repetido: { etiqueta: 'Sticker ya escaneado', nivel: 'alerta' },
   serial_ajeno: { etiqueta: 'Sticker de otro club', nivel: 'alerta' },
-  no_inventariado: { etiqueta: 'Sticker no impreso por nosotros', nivel: 'alerta' },
   desconocido: { etiqueta: 'Evento fuera del catálogo', nivel: 'alerta' },
   invalido: { etiqueta: 'QR inválido', nivel: 'alerta' },
 };
@@ -27,12 +26,11 @@ export const ESTADOS = {
 /**
  * @param {Array} escaneos  en el orden en que se escanearon. Cada uno: { crudo, ts }
  * @param {Object} opciones
- *   - inventario: Set con los ids de sticker impresos ("F03-0147"). null = no verificar.
  *   - usadosPorOtros: Map id de sticker -> id de club que ya lo uso.
  * @returns resultado completo del club
  */
 export function calcular(escaneos, opciones = {}) {
-  const { inventario = null, usadosPorOtros = null } = opciones;
+  const { usadosPorOtros = null } = opciones;
 
   const detalle = [];
   const alertas = [];
@@ -79,12 +77,6 @@ export function calcular(escaneos, opciones = {}) {
       return;
     }
 
-    // Formato y firma correctos pero el serial no salio de nuestra imprenta.
-    if (inventario && !inventario.has(lectura.id)) {
-      anotar('no_inventariado', { evento, detalleTexto: `El serial ${lectura.serial} no figura en el inventario` });
-      return;
-    }
-
     const yaContado = eventosContados.get(evento.codigo);
     const puedeRepetir = evento.tipo === 'adicional' && REGLAS.adicionalesRepetibles;
     if (yaContado && !puedeRepetir) {
@@ -108,7 +100,7 @@ export function calcular(escaneos, opciones = {}) {
     // El sticker trae su puntaje impreso. Si no coincide con el catalogo actual es
     // que se imprimio con otra configuracion: mandamos el del catalogo y avisamos.
     const puntosCatalogo = evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO;
-    if (lectura.puntos !== puntosCatalogo) {
+    if (Number.isInteger(lectura.puntos) && lectura.puntos !== puntosCatalogo) {
       alertas.push({
         nivel: 'aviso',
         texto: `El sticker de "${evento.nombre}" dice ${lectura.puntos} pts pero el catálogo indica ${puntosCatalogo}. Se usó ${puntosCatalogo}.`,
@@ -145,7 +137,7 @@ export function calcular(escaneos, opciones = {}) {
     });
   }
   for (const d of detalle) {
-    if (['repetido', 'serial_repetido', 'serial_ajeno', 'no_inventariado', 'desconocido', 'invalido'].includes(d.estado)) {
+    if (['repetido', 'serial_repetido', 'serial_ajeno', 'desconocido', 'invalido'].includes(d.estado)) {
       const nombre = d.evento ? `"${d.evento.nombre}"` : d.escaneo.crudo;
       alertas.push({
         nivel: ESTADOS[d.estado].nivel,

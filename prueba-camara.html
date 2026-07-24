@@ -139,7 +139,7 @@ $('#muestras').innerHTML = muestras.map(texto => {
   const evento = lectura.clase === 'sticker' ? buscarEvento(lectura.codigo) : null;
   const rotulo = evento ? evento.nombre : 'Club de prueba (ediquin)';
   return `<figure>
-    ${matrizASvg(generarMatriz(texto, { nivel: 'Q' }), { lado: 40 })}
+    ${matrizASvg(generarMatriz(texto, { nivel: 'H', versionMinima: 2 }), { lado: 40 })}
     <figcaption>${escapar(rotulo)}<br>${escapar(texto)}</figcaption>
   </figure>`;
 }).join('');

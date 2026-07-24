@@ -1,8 +1,8 @@
-/* Lo que sale por la impresora: hojas de stickers y fichas de evaluacion.
+/* Lo que sale por la impresora: hojas de stickers QR.
    Todas las medidas van en milimetros porque el resultado es fisico: un sticker
    de 26 mm tiene que medir 26 mm en el papel. */
 
-/* Compacta a proposito: 9 filas de stickers ocupan 270 mm y en una A4 con margenes
+/* Compacta a proposito: 8 filas de stickers entran en una A4 con margenes
    de 8 mm quedan 281 utiles. Si esta cabecera crece, cada hoja empuja una pagina
    en blanco detras. */
 .hoja-titulo {
@@ -18,19 +18,18 @@
 
 /* ---------------------------------------------------------------- stickers */
 
-/* El sticker mide 24 x 29 mm: 24 de codigo QR mas una linea de texto para que el
-   juez de la estacion sepa de que taco es. Con 33 modulos en 24 mm cada modulo
-   queda en 0,73 mm, bien por encima de lo que necesita la camara de un celular. */
+/* El sticker mide 26 x 32 mm: 26 de codigo QR mas una linea de texto para que el
+   juez de la estacion sepa de que taco es. */
 .rejilla-stickers {
   display: grid;
-  grid-template-columns: repeat(7, 25mm);
-  grid-auto-rows: 30mm;
+  grid-template-columns: repeat(7, 27mm);
+  grid-auto-rows: 33mm;
   justify-content: center;
 }
 
 .sticker {
-  width: 24mm;
-  height: 29mm;
+  width: 26mm;
+  height: 32mm;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -41,7 +40,7 @@
   break-inside: avoid;
 }
 
-.sticker svg { width: 24mm; height: 24mm; display: block; }
+.sticker svg { width: 26mm; height: 26mm; display: block; }
 
 .sticker .pie {
   font: 700 5.5pt/1 ui-monospace, Consolas, monospace;
@@ -163,7 +162,7 @@
 
 .rejilla-kit {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 2mm;
 }
 
@@ -180,7 +179,7 @@
 /* Los que deben ser rechazados van marcados: si alguno suma puntos, hay un problema. */
 .sticker-kit.trampa { border: .5mm dashed #000; background: #f0f0f0; }
 
-.sticker-kit svg { width: 17mm; height: 17mm; display: block; flex: 0 0 auto; }
+.sticker-kit svg { width: 26mm; height: 26mm; display: block; flex: 0 0 auto; }
 
 .rotulo-kit { font-size: 5.5pt; line-height: 1.25; min-width: 0; }
 .rotulo-kit strong { font-family: ui-monospace, Consolas, monospace; }

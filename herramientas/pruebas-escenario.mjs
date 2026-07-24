@@ -23,12 +23,6 @@ console.log(`Club de prueba: ${club.nombre} (${club.id})\n`);
 
 // ------------------------------------------------------------------ la ficha
 
-// El inventario: lo que realmente imprimimos. Seriales 1 a 50 de cada evento.
-const inventario = new Set();
-for (const e of [...EVENTOS_FISICOS, ...EVENTOS_ESPIRITUALES]) {
-  for (let n = 1; n <= 50; n++) inventario.add(`${e.codigo}-${String(n).padStart(4, '0')}`);
-}
-
 let reloj = Date.parse('2026-08-14T09:00:00Z');
 const pegar = (codigo, serial) => ({ crudo: armarSticker(codigo, 200, serial), ts: reloj += 60000 });
 
@@ -68,13 +62,10 @@ const usadosPorOtros = new Map([[leerQr(robado).id, 'C053']]);
 // Trampa 4: un QR generado con el celular que solo dice el puntaje.
 ficha.push({ que: 'TRAMPA: QR casero que dice 200', escaneo: { crudo: '200', ts: reloj += 60000 } });
 
-// Trampa 5: QR con el formato correcto pero un serial que nunca imprimimos.
-ficha.push({ que: 'TRAMPA: serial 9876, que no salio de nuestra imprenta', escaneo: pegar('F12', 9876) });
-
 // ------------------------------------------------------------------ evaluacion
 
 const escaneos = ficha.map(f => f.escaneo);
-const r = calcular(escaneos, { inventario, usadosPorOtros });
+const r = calcular(escaneos, { usadosPorOtros });
 
 console.log('ESCANEO POR ESCANEO');
 console.log('-'.repeat(78));
@@ -118,17 +109,16 @@ comprobar('detecta los 2 fisicos de mas', porEstado.excedente, 2);
 comprobar('detecta la fotocopia', porEstado.serial_repetido, 1);
 comprobar('detecta el sticker de otro club', porEstado.serial_ajeno, 1);
 comprobar('detecta el QR casero', porEstado.invalido, 1);
-comprobar('detecta el serial no impreso', porEstado.no_inventariado, 1);
 comprobar('cuenta 15 escaneos validos', porEstado.contado, 15);
 
 comprobar('ninguna trampa suma puntos',
   r.detalle.filter(d => d.estado !== 'contado').every(d => d.puntos === 0), true);
-// Las cinco graves: evento repetido, fotocopia, sticker ajeno, QR casero y serial
-// no inventariado. El exceso de fisicos es solo un aviso, no una trampa.
-comprobar('hay 5 alertas graves para revisar',
-  r.alertas.filter(a => a.nivel === 'alerta').length, 5);
+// Las cuatro graves: evento repetido, fotocopia, sticker ajeno y QR casero.
+// El exceso de fisicos es solo un aviso, no una trampa.
+comprobar('hay 4 alertas graves para revisar',
+  r.alertas.filter(a => a.nivel === 'alerta').length, 4);
 comprobar('las alertas graves aparecen antes que los avisos',
-  r.alertas.slice(0, 5).every(a => a.nivel === 'alerta'), true);
+  r.alertas.slice(0, 4).every(a => a.nivel === 'alerta'), true);
 comprobar('el exceso de fisicos queda como aviso, no como alerta',
   r.alertas.at(-1).nivel, 'aviso');
 
@@ -136,7 +126,7 @@ comprobar('el exceso de fisicos queda como aviso, no como alerta',
 const limpio = calcular([
   ...EVENTOS_FISICOS.slice(0, 8).map((e, i) => pegar(e.codigo, i + 1)),
   ...EVENTOS_ESPIRITUALES.map((e, i) => pegar(e.codigo, i + 20)),
-], { inventario });
+]);
 comprobar('una ficha impecable no genera alertas', limpio.alertas.length, 0);
 comprobar('una ficha impecable da 3000', limpio.total, 3000);
 

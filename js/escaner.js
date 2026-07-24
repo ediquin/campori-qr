@@ -126,7 +126,7 @@ export class Escaner {
     const video = idCamara
       ? { deviceId: { exact: idCamara } }
       : { facingMode: { ideal: 'environment' } };
-    // Pedimos buena resolucion: los stickers son de 24 mm y con video de baja
+    // Pedimos buena resolucion: los stickers son de 26 mm y con video de baja
     // definicion el codigo queda con muy pocos pixeles por modulo.
     Object.assign(video, { width: { ideal: 1280 }, height: { ideal: 720 } });
 

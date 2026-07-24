@@ -16,7 +16,7 @@ JavaScript que el navegador abre tal cual. Funciona sin señal.
 | | Para qué |
 |---|---|
 | [`index.html`](index.html) | Menú y explicación general |
-| [`generador.html`](generador.html) | Imprime las hojas de stickers y las fichas de cada club |
+| [`generador.html`](generador.html) | Genera e imprime únicamente los QR de los eventos |
 | [`evaluador.html`](evaluador.html) | Escanea las fichas con la cámara y arma el puntaje |
 | [`kit-prueba.html`](kit-prueba.html) | Ensayo completo con trampas incluidas, antes del campori |
 | [`prueba-camara.html`](prueba-camara.html) | Verifica que la cámara de cada celular lea bien |
@@ -30,14 +30,14 @@ JavaScript que el navegador abre tal cual. Funciona sin señal.
 | **Base** | | | | **3000** |
 | Adicional | criterios sueltos | 100 / 50 | Aparte del puntaje base | — |
 
-Cada sticker lleva un número de serie único y una firma, así que el sistema detecta
+Cada sticker lleva un identificador aleatorio único, así que el sistema detecta
 eventos repetidos, stickers fotocopiados y stickers prestados entre clubes.
 
 ## Correrlo localmente
 
 ```bash
 node herramientas/servidor.mjs      # http://localhost:8080
-node herramientas/pruebas.mjs       # 365 comprobaciones
+node herramientas/pruebas.mjs       # 368 comprobaciones
 node herramientas/generar-clubes.mjs  # regenera el padrón desde el Excel
 ```
 
@@ -54,12 +54,9 @@ bloquea. `localhost` también cuenta como seguro, para probar en la computadora.
 
 ## Antes de usarlo en serio
 
-1. **Cambiá la clave de firma** en [`js/catalogo.js`](js/catalogo.js) antes de
-   imprimir. Es lo que hace que un QR sea nuestro y no de cualquiera.
-El evaluador está en modo de **inventario automático**: no hay que cargar archivos
-en los teléfonos. Todo QR con firma válida y evento conocido puede usarse por primera
-vez con cualquier club. El generador recuerda automáticamente los seriales usados en
-ese navegador para que una tanda nueva continúe la numeración.
+No hay que configurar inventarios ni claves. Cada vez que se generan hojas, todos
+los QR reciben identificadores nuevos. El puntaje se toma del catálogo de eventos,
+no del texto contenido en el QR.
 
 ## Datos personales
 

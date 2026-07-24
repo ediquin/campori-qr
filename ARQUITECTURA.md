@@ -46,7 +46,7 @@ Estas tres explican casi todas las decisiones raras del proyecto:
 
 Consecuencia directa: **cero dependencias**. Lo que normalmente sería una librería
 está escrito acá adentro. Eso incluye el generador de QR, el lector de QR, el
-escritor de `.xlsx` y el hash HMAC-SHA256. Suena excesivo; la sección 9 muestra que
+escritor de `.xlsx` y la compatibilidad HMAC-SHA256 con QR antiguos. La sección 9 muestra que
 esas piezas están mejor verificadas de lo que suele estarlo el código de pegamento
 alrededor de una librería.
 
@@ -57,12 +57,9 @@ alrededor de una librería.
 ### 3.1 Qué lleva cada código QR
 
 ```
-AV5-F03-200-0147-K7M2
- │   │   │    │    └── firma HMAC-SHA256 truncada a 20 bits
- │   │   │    └─────── serial único de ESE sticker impreso
- │   │   └──────────── puntos
- │   └──────────────── código del evento
- └──────────────────── prefijo del campori
+F03-7K9M2Q8R
+ │       └──── identificador aleatorio único de ese sticker
+ └──────────── código del evento
 ```
 
 **La propuesta original era que el QR solo dijera el puntaje** ("un QR de 200 puntos").
@@ -78,13 +75,13 @@ clubes.
 
 Detalles de formato, todos con motivo:
 
-- **Solo `0-9`, `A-Z` y `-`**, que es el juego alfanumérico del estándar QR. Permite
-  codificar en modo alfanumérico (11 bits por dos caracteres) en vez de modo byte
-  (8 bits por carácter). Con eso los 21 caracteres entran en un símbolo **versión 2**
-  (25×25 módulos) con corrección **nivel Q** (tolera 25% de daño).
-- **Base32 de Crockford** para la firma: sin `I`, `L`, `O` ni `U`, para que nadie
-  confunda un `1` con una `I` al tipear un código a mano.
-- A **24 mm impreso**, cada módulo mide 0,73 mm. Con margen para que el sticker
+- **Solo `0-9`, `A-Z` y `-`**, que es el juego alfanumérico del estándar QR.
+  El contenido operativo tiene 12 caracteres: `F03-7K9M2Q8R`.
+- **Base32 de Crockford** para el identificador aleatorio: sin `I`, `L`, `O` ni `U`.
+- Se fuerza un símbolo **versión 2** (25×25 módulos) con corrección **nivel H**.
+  La versión 2 conserva un patrón de alineación que ayuda al lector cuando el
+  teléfono está inclinado.
+- A **26 mm impreso**, queda margen para que el sticker
   quede arrugado o manchado.
 
 ### 3.2 Por qué no hay backend
@@ -92,7 +89,7 @@ Detalles de formato, todos con motivo:
 No hay servidor propio. La app entera corre dentro del navegador del celular.
 
 - **GitHub Pages es un estante, no un servicio.** Sirve archivos; no recibe nada.
-- Un service worker guarda los 24 archivos de la app. Después de la primera visita,
+- Un service worker guarda los 26 archivos de la app. Después de la primera visita,
   **la app abre con el teléfono en modo avión**. Verificado, no supuesto.
 - Los datos viven en **IndexedDB**, dentro del teléfono.
 
@@ -152,32 +149,23 @@ pero hablamos de kilobytes.
 
 ---
 
-## 4. Las capas anti-fraude, y qué caza cada una
+## 4. Las capas contra duplicados, y qué caza cada una
 
 Están puestas en cascada. Cada una tapa un agujero distinto:
 
 | Capa | Qué detecta | Qué NO detecta |
 |---|---|---|
-| **Firma HMAC** | QR fabricado con cualquier generador | Un QR hecho con el código fuente en mano |
-| **Inventario de seriales** | Desactivado en el modo operativo actual | Requeriría cargar un archivo en cada teléfono |
 | **Clave compuesta en la base** | El mismo sticker escaneado dos veces en la misma ficha | — |
 | **Evento ya contado** | Dos stickers distintos del mismo evento | — |
 | **Cupo de 8 físicos** | Más eventos de los permitidos | — |
 | **Seriales usados por otros** | Sticker despegado de una ficha y pegado en otra | Ver 4.2 |
 
-### 4.1 Sobre la firma
+### 4.1 Formato operativo simple
 
-Es HMAC-SHA256 truncada a 20 bits. **No es inviolable**: el repositorio es público,
-así que quien lea [`js/catalogo.js`](js/catalogo.js) puede generar un QR válido.
-
-Por decisión operativa, el evaluador está en modo de **inventario automático**:
-acepta cualquier QR con firma válida y evento conocido. No hay que distribuir un
-archivo entre teléfonos. El costo de esa simplificación es que no puede distinguir
-un serial firmado que nunca salió de la impresión oficial.
-
-El generador conserva automáticamente en `localStorage` los seriales que ya creó.
-Así, cerrar y volver a abrir la página no reinicia la numeración. El archivo de
-respaldo solo es necesario si la generación continúa en otro navegador o equipo.
+Los stickers nuevos no llevan firma ni inventario. Cada QR contiene solamente el
+código del evento y ocho caracteres aleatorios. El generador evita repetirlos dentro
+del navegador y la probabilidad de coincidencia entre equipos es despreciable para
+el volumen del campori. Los QR firmados antiguos siguen siendo compatibles.
 
 ### 4.2 La capa que depende de juntar los datos
 
@@ -204,7 +192,7 @@ otro club.
 |---|---|---|
 | `escaneos` | `[idClub, crudo]` | `{ idClub, crudo, ts, dispositivo }` — índices por `idClub` y por `crudo` |
 | `fichas` | `idClub` | `{ idClub, cerrada, actualizada }` |
-| `ajustes` | `clave` | nombre del dispositivo, config de Sheets, seriales remotos; puede quedar un inventario heredado que el modo automático ignora |
+| `ajustes` | `clave` | nombre del dispositivo, config de Sheets y seriales remotos |
 
 ### Padrón de clubes
 
@@ -247,7 +235,6 @@ Cada escaneo termina en exactamente uno de estos estados:
 | `excedente` | aviso | no — pasó el cupo de 8 |
 | `serial_repetido` | alerta | no — el mismo sticker dos veces |
 | `serial_ajeno` | alerta | no — ya lo usó otro club |
-| `no_inventariado` | alerta | Estado disponible en el motor, no usado en el modo automático |
 | `desconocido` | alerta | no — código fuera del catálogo |
 | `invalido` | alerta | no — firma mala o formato ilegible |
 
@@ -320,7 +307,7 @@ porque es exactamente el tipo de cosa que alguien "limpia" y rompe.
 ```
 Páginas
   index.html            menú
-  generador.html        imprime stickers y fichas
+  generador.html        genera e imprime QR de eventos
   evaluador.html        app de escaneo
   kit-prueba.html       ensayo completo con trampas incluidas
   prueba-camara.html    diagnóstico de cámara por dispositivo
@@ -355,7 +342,7 @@ Herramientas (Node, sin dependencias)
 
 ## 9. Estrategia de pruebas
 
-`node herramientas/pruebas.mjs` — **365 comprobaciones**, sin framework.
+`node herramientas/pruebas.mjs` — **368 comprobaciones**, sin framework.
 
 El criterio: cada suite tiene que probar contra algo **independiente**, no contra sí
 misma.
@@ -398,7 +385,7 @@ Todos medidos, no estimados:
 | Inclinación del lector propio | deja de leer más allá de **~45°** respecto de la perpendicular | Solo iPhone. Está anotado como prueba, así que si mejora o empeora, avisa. |
 | Versiones QR soportadas | 1 a 10 | Nuestros códigos son versión 2. Sobra. |
 | Desfase de relojes | no se corrige | La regla de "los 8 primeros" usa la hora del escaneo. Con relojes desfasados el orden puede salir mal. Solo se avisa. |
-| Firma | 20 bits, clave en repo público | Ver 4.1. El modo automático prioriza rapidez sobre control de emisión. |
+| Copia de QR | no se intenta impedir | La operación prioriza rapidez; los duplicados sí se detectan. |
 | Detección entre clubes | requiere juntar datos | Ver 4.2. |
 
 ---
@@ -407,21 +394,19 @@ Todos medidos, no estimados:
 
 Si el objetivo es dar feedback, mirar acá primero:
 
-1. **El inventario estricto está desactivado.** Un QR con firma válida y evento
-   conocido se acepta aunque su serial no figure en una lista de impresión.
-2. **La clave de firma está en un repositorio público.** Hay que cambiarla antes de
-   imprimir. Si no, la firma no aporta nada.
-3. **Los criterios de puntaje adicional son de ejemplo.** `CRITERIOS_ADICIONALES` en
+1. **Los QR operativos se pueden copiar o fabricar.** Es una decisión explícita para
+   simplificar la preparación; el sistema se concentra en sumar y detectar duplicados.
+2. **Los criterios de puntaje adicional son de ejemplo.** `CRITERIOS_ADICIONALES` en
    [`js/catalogo.js`](js/catalogo.js) tiene valores inventados que hay que reemplazar.
-4. **Cambiar un código de evento invalida los stickers ya impresos.** Agregar al
+3. **Cambiar un código de evento invalida los stickers ya impresos.** Agregar al
    final es seguro; renumerar no.
-5. **La URL del Apps Script es efectivamente una contraseña.** Quien la tenga puede
+4. **La URL del Apps Script es efectivamente una contraseña.** Quien la tenga puede
    escribir en la planilla. Por eso se guarda en el teléfono y nunca en el repo.
-6. **La ruta de Sheets depende de que alguien se acuerde de "Traer lo de los demás".** Se
+5. **La ruta de Sheets depende de que alguien se acuerde de "Traer lo de los demás".** Se
    hace solo al abrir la app, pero si un evaluador la deja abierta todo el día, sus
    datos remotos envejecen. Un fallo silencioso: no se rompe nada, simplemente deja
    de detectar.
-7. **El desfase de relojes no tiene defensa**, solo un aviso en Ajustes.
+6. **El desfase de relojes no tiene defensa**, solo un aviso en Ajustes.
 
 ---
 

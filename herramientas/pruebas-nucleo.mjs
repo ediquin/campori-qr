@@ -7,11 +7,12 @@
 
 import crypto from 'crypto';
 import {
-  CAMPORI, REGLAS, PUNTOS_EVENTO, TOPE_BASE,
+  CAMPORI, PUNTOS_EVENTO, TOPE_BASE,
   EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES,
 } from '../js/catalogo.js';
 import { firmar, armarSticker, armarQrClub, leerQr } from '../js/codigo.js';
 import { calcular } from '../js/puntaje.js';
+import { crearIdentificador } from '../js/identificador.js';
 
 let pasadas = 0;
 const fallos = [];
@@ -53,13 +54,13 @@ grupo('Firma y formato de los codigos QR');
 
 {
   const s = armarSticker('F03', 200, 147);
-  comprobar('sticker: formato', s, `AV5-F03-200-0147-${firmar('AV5-F03-200-0147')}`);
-  comprobar('sticker: entra en un QR version 2', s.length <= 35, true);
+  comprobar('sticker: formato corto', s, 'F03-00000147');
+  comprobar('sticker: solo tiene 12 caracteres', s.length, 12);
   comprobar('sticker: solo caracteres alfanumericos QR', /^[0-9A-Z\-]+$/.test(s), true);
 
   const l = leerQr(s);
   comprobar('sticker: se relee entero', [l.clase, l.codigo, l.puntos, l.serial, l.id],
-    ['sticker', 'F03', 200, '0147', 'F03-0147']);
+    ['sticker', 'F03', null, '00000147', 'F03-00000147']);
 
   const c = armarQrClub('C012');
   comprobar('club: se relee entero', [leerQr(c).clase, leerQr(c).idClub], ['club', 'C012']);
@@ -67,9 +68,8 @@ grupo('Firma y formato de los codigos QR');
   comprobar('rechaza texto vacio', leerQr('').motivo, 'vacio');
   comprobar('rechaza un QR ajeno', leerQr('https://ejemplo.com').motivo, 'ajeno');
   comprobar('rechaza firma inventada', leerQr('AV5-F03-200-0147-ZZZZ').motivo, 'firma');
-  comprobar('rechaza puntaje alterado', leerQr(s.replace('-200-', '-999-')).motivo, 'firma');
-  comprobar('rechaza evento alterado', leerQr(s.replace('-F03-', '-F09-')).motivo, 'firma');
-  comprobar('rechaza serial alterado', leerQr(s.replace('-0147-', '-0148-')).motivo, 'firma');
+  comprobar('acepta un identificador corto válido sin firma', leerQr('F09-ABCD1234').ok, true);
+  comprobar('rechaza identificador con largo incorrecto', leerQr('F09-ABC123').motivo, 'formato');
   comprobar('tolera minusculas y espacios', leerQr(`  ${s.toLowerCase()} \n`).clase, 'sticker');
 }
 
@@ -94,12 +94,17 @@ grupo('Club que hace todo bien');
 grupo('Modo operativo sin inventario');
 
 {
+  const usados = new Set();
+  const ids = Array.from({ length: 5000 }, () => crearIdentificador(usados, 'F01'));
+  comprobar('5000 identificadores generados son distintos', new Set(ids).size, 5000);
+  comprobar('todos tienen ocho caracteres QR legibles',
+    ids.every(id => /^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{8}$/.test(id)), true);
+
   const eventos = [...EVENTOS_FISICOS, ...EVENTOS_ESPIRITUALES, ...CRITERIOS_ADICIONALES];
   const estados = eventos.map((evento, i) => {
     const puntos = evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO;
     return calcular([sticker(evento.codigo, puntos, 6000 + i)]).detalle[0].estado;
   });
-  comprobar('el inventario automático está activado', REGLAS.inventarioAutomatico, true);
   comprobar('todos los QR actuales se aceptan sin inventario',
     estados.every(estado => estado === 'contado'), true);
 
@@ -163,16 +168,6 @@ grupo('Deteccion de trampas');
 }
 
 {
-  // QR bien formado y firmado, pero cuyo serial no salio de nuestra imprenta.
-  const impreso = sticker('F01', PUNTOS_EVENTO, 1);
-  const noImpreso = sticker('F01', PUNTOS_EVENTO, 4321);
-  const inventario = new Set([leerQr(impreso.crudo).id]);
-  const r = calcular([impreso, noImpreso], { inventario });
-  comprobar('acepta el que esta en el inventario', r.detalle[0].estado, 'contado');
-  comprobar('rechaza el que no esta', r.detalle[1].estado, 'no_inventariado');
-}
-
-{
   // QR fabricado por fuera con un generador cualquiera.
   const r = calcular([{ crudo: 'AV5-F01-200-0001-AAAA', ts: 0 }, { crudo: '200', ts: 0 }]);
   comprobar('rechaza firma falsa', r.detalle[0].estado, 'invalido');
@@ -219,7 +214,8 @@ grupo('Casos borde');
   comprobar('rechaza un codigo fuera del catalogo', desconocido.detalle[0].estado, 'desconocido');
 
   // Sticker impreso con un puntaje que ya no coincide con el catalogo.
-  const viejo = calcular([sticker('F01', 150)]);
+  const cuerpoViejo = 'AV5-F01-150-0147';
+  const viejo = calcular([{ crudo: `${cuerpoViejo}-${firmar(cuerpoViejo)}`, ts: 0 }]);
   comprobar('usa el puntaje del catalogo, no el del sticker', viejo.fisico.puntos, PUNTOS_EVENTO);
   comprobar('avisa de la diferencia', viejo.alertas.some(a => a.texto.includes('150')), true);
 }

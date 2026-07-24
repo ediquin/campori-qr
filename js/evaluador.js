@@ -16,7 +16,7 @@ const hoy = () => new Date().toISOString().slice(0, 10);
 
 const ICONOS = {
   contado: '✅', club: '🏷️', repetido: '🔁', excedente: '🔢',
-  serial_repetido: '🔁', serial_ajeno: '🚨', no_inventariado: '🚨',
+  serial_repetido: '🔁', serial_ajeno: '🚨',
   desconocido: '❓', invalido: '❌',
 };
 
@@ -26,7 +26,6 @@ const estado = {
   escaneos: [],         // escaneos del club actual, en orden
   todos: [],            // todos los escaneos de todos los clubes
   fichas: new Map(),
-  inventario: null,     // legado; el modo automático lo ignora
   dispositivo: '',      // quien evalua con este telefono
   // Que sticker uso cada club segun la planilla compartida. Es lo que permite
   // detectar un sticker prestado entre clubes que evaluaron personas distintas:
@@ -70,9 +69,6 @@ function idDeSticker(crudo) {
 
 function resultadoDe(idClub, escaneos) {
   return calcular(escaneos, {
-    // El inventario está desactivado de forma deliberada: ningún QR válido del
-    // generador se rechaza por pertenecer a una tanda distinta.
-    inventario: null,
     usadosPorOtros: usadosPorOtros(idClub),
   });
 }
@@ -439,9 +435,6 @@ function hojasParaExportar({ soloConEscaneos = false } = {}) {
     ['Eventos espirituales', `${REGLAS.espiritualesObligatorios}, todos obligatorios`],
     ['Máximo espiritual', TOPE_ESPIRITUAL],
     ['Máximo base', TOPE_FISICO + TOPE_ESPIRITUAL],
-    ['Inventario de stickers', REGLAS.inventarioAutomatico
-      ? 'Automático: todos los QR con firma válida'
-      : estado.inventario ? `${estado.inventario.size} seriales cargados` : 'Estricto: NO cargado'],
   ];
 
   // claveColumna le dice al script de Google por que columna fusionar. Las hojas
@@ -589,7 +582,6 @@ async function pintarDiagnostico() {
       `Lector ${VERSION_LECTOR} · ${await Escaner.descripcionMotor()}`],
     [seguro ? '✅' : '❌', 'Contexto seguro (HTTPS)',
       seguro ? 'Sí, la cámara puede abrirse' : 'No. Sin HTTPS el navegador bloquea la cámara.'],
-    ['✅', 'Inventario de stickers', 'Automático · sin archivo'],
     ['📋', 'Clubes en el padrón', String(CLUBES.length)],
     [estado.remotos.size ? '✅' : '⚠️', 'Stickers usados por otros clubes',
       estado.remotos.size
@@ -609,9 +601,6 @@ async function iniciar() {
   await almacen.abrir();
   estado.todos = await almacen.todosLosEscaneos();
   estado.fichas = await almacen.fichas();
-
-  const guardado = await almacen.leerAjuste('inventario');
-  if (Array.isArray(guardado)) estado.inventario = new Set(guardado);
 
   estado.dispositivo = await almacen.leerAjuste('dispositivo', '') || '';
   $('#nombre-dispositivo').value = estado.dispositivo;
