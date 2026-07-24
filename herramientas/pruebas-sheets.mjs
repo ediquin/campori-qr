@@ -1,0 +1,148 @@
+// Verifica la fusion de envios en Google Sheets.
+//
+//   node herramientas/pruebas-sheets.mjs
+//
+// El riesgo concreto: si dos evaluadores mandan a la misma planilla y el script
+// reemplaza todo, el segundo envio borra el trabajo del primero. Aca se reproduce
+// esa situacion con la misma logica que corre dentro de Apps Script y se comprueba
+// que cada uno actualiza solo lo suyo.
+//
+// Nota: se reimplementa la fusion en vez de importar apps-script.gs porque ese
+// archivo corre dentro de Google y usa sus APIs. Lo que se prueba es la REGLA;
+// si cambia una, hay que cambiar la otra.
+
+let pasadas = 0;
+const fallos = [];
+function comprobar(nombre, obtenido, esperado) {
+  if (JSON.stringify(obtenido) === JSON.stringify(esperado)) { pasadas++; return; }
+  fallos.push(`${nombre}\n      obtenido: ${JSON.stringify(obtenido)}\n      esperado: ${JSON.stringify(esperado)}`);
+}
+const grupo = t => console.log(`\n--- ${t}`);
+
+/** Misma regla que doPost() en herramientas/apps-script.gs. */
+function fusionar(hojaPrevia, entrada) {
+  const encabezado = entrada.filas[0];
+  const nuevas = entrada.filas.slice(1);
+
+  if (entrada.reemplazar || entrada.claveColumna == null) {
+    return [encabezado, ...nuevas];
+  }
+
+  const col = entrada.claveColumna;
+  const entrantes = new Set(nuevas.map(f => String(f[col])));
+  const previas = hojaPrevia.length > 1 ? hojaPrevia.slice(1) : [];
+  const conservadas = previas.filter(f => String(f[col]) !== '' && !entrantes.has(String(f[col])));
+
+  const finales = [...conservadas, ...nuevas];
+  finales.sort((a, b) => String(a[col]).localeCompare(String(b[col])));
+  return [encabezado, ...finales];
+}
+
+const ENCABEZADO = ['ID', 'Club', 'Total'];
+const idsDe = hoja => hoja.slice(1).map(f => f[0]);
+const totalDe = (hoja, id) => (hoja.slice(1).find(f => f[0] === id) || [])[2];
+
+grupo('Dos evaluadores mandan a la misma planilla');
+
+{
+  // Heber evaluo tres clubes de la Region 1.
+  const deHeber = {
+    nombre: 'Puntajes', claveColumna: 0,
+    filas: [ENCABEZADO, ['C001', 'Aziel Calacoto Jr.', 3000], ['C002', 'Gerizim', 2800], ['C003', 'Lemuel', 3000]],
+  };
+  // Maria evaluo dos de la Region 8, distintos.
+  const deMaria = {
+    nombre: 'Puntajes', claveColumna: 0,
+    filas: [ENCABEZADO, ['C053', 'Guardianes', 2600], ['C054', 'Haverin', 3000]],
+  };
+
+  let planilla = [ENCABEZADO];
+  planilla = fusionar(planilla, deHeber);
+  comprobar('tras el envio de Heber', idsDe(planilla), ['C001', 'C002', 'C003']);
+
+  planilla = fusionar(planilla, deMaria);
+  comprobar('tras el envio de Maria estan los cinco', idsDe(planilla),
+    ['C001', 'C002', 'C003', 'C053', 'C054']);
+  comprobar('lo de Heber sigue intacto', totalDe(planilla, 'C001'), 3000);
+  comprobar('lo de Maria entro', totalDe(planilla, 'C054'), 3000);
+}
+
+grupo('Reenviar no duplica ni pisa');
+
+{
+  let planilla = [ENCABEZADO,
+    ['C001', 'Aziel Calacoto Jr.', 3000], ['C053', 'Guardianes', 2600]];
+
+  // Heber corrige un club y reenvia lo suyo.
+  planilla = fusionar(planilla, {
+    nombre: 'Puntajes', claveColumna: 0,
+    filas: [ENCABEZADO, ['C001', 'Aziel Calacoto Jr.', 2800]],
+  });
+
+  comprobar('no se duplican filas', idsDe(planilla), ['C001', 'C053']);
+  comprobar('el club corregido quedo con el valor nuevo', totalDe(planilla, 'C001'), 2800);
+  comprobar('el club del otro evaluador no se toco', totalDe(planilla, 'C053'), 2600);
+}
+
+grupo('El orden de llegada no cambia el resultado');
+
+{
+  const a = { nombre: 'P', claveColumna: 0, filas: [ENCABEZADO, ['C010', 'Diez', 1000]] };
+  const b = { nombre: 'P', claveColumna: 0, filas: [ENCABEZADO, ['C002', 'Dos', 2000]] };
+  const c = { nombre: 'P', claveColumna: 0, filas: [ENCABEZADO, ['C100', 'Cien', 3000]] };
+
+  const unOrden = [a, b, c].reduce((p, e) => fusionar(p, e), [ENCABEZADO]);
+  const otroOrden = [c, a, b].reduce((p, e) => fusionar(p, e), [ENCABEZADO]);
+  comprobar('mande quien mande primero, la planilla queda igual', unOrden, otroOrden);
+  comprobar('y queda ordenada por ID', idsDe(unOrden), ['C002', 'C010', 'C100']);
+}
+
+grupo('Casos que no deben romper');
+
+{
+  // Hoja de parametros: sin clave de club, se reescribe entera.
+  const previa = [['Parámetro', 'Valor'], ['Campori', 'viejo']];
+  const nueva = fusionar(previa, { nombre: 'Parámetros', reemplazar: true, filas: [['Parámetro', 'Valor'], ['Campori', 'nuevo']] });
+  comprobar('los parametros se reescriben', nueva, [['Parámetro', 'Valor'], ['Campori', 'nuevo']]);
+
+  // Un envio sin filas de datos no borra nada.
+  const conDatos = [ENCABEZADO, ['C001', 'Uno', 100]];
+  comprobar('un envio vacio deja la planilla como estaba',
+    fusionar(conDatos, { nombre: 'Puntajes', claveColumna: 0, filas: [ENCABEZADO] }), conDatos);
+
+  // Filas viejas con el ID en blanco se descartan, no se arrastran.
+  const conBasura = [ENCABEZADO, ['', 'fila suelta', 0], ['C001', 'Uno', 100]];
+  const limpia = fusionar(conBasura, { nombre: 'Puntajes', claveColumna: 0, filas: [ENCABEZADO, ['C002', 'Dos', 200]] });
+  comprobar('las filas sin ID no se arrastran', idsDe(limpia), ['C001', 'C002']);
+}
+
+grupo('Lo que el envio NO hace');
+
+{
+  // Un telefono que manda TODOS los clubes, incluidos los que no evaluo, pisaria
+  // el trabajo del otro con ceros. Por eso la app manda solo lo suyo: esta prueba
+  // deja documentado por que.
+  let planilla = [ENCABEZADO, ['C053', 'Guardianes', 2600]];
+  const malEnvio = {
+    nombre: 'Puntajes', claveColumna: 0,
+    filas: [ENCABEZADO, ['C001', 'Aziel', 3000], ['C053', 'Guardianes', 0]],
+  };
+  const rota = fusionar(planilla, malEnvio);
+  comprobar('mandar clubes no evaluados SI los pisaria (por eso no se hace)',
+    totalDe(rota, 'C053'), 0);
+
+  const buenEnvio = {
+    nombre: 'Puntajes', claveColumna: 0,
+    filas: [ENCABEZADO, ['C001', 'Aziel', 3000]],
+  };
+  const sana = fusionar(planilla, buenEnvio);
+  comprobar('mandando solo lo propio, el otro club queda intacto', totalDe(sana, 'C053'), 2600);
+}
+
+console.log('');
+if (fallos.length) {
+  for (const f of fallos) console.error(`FALLA ${f}`);
+  console.error(`\n${pasadas} pasadas, ${fallos.length} FALLIDAS`);
+  process.exit(1);
+}
+console.log(`${pasadas} pruebas pasadas.`);

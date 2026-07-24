@@ -371,8 +371,18 @@ function pintarResultados() {
   }).join('');
 }
 
-function hojasParaExportar() {
-  const todos = resultadosDeTodos();
+/**
+ * Arma las hojas del Excel y del envio a Google Sheets.
+ *
+ * `soloConEscaneos` importa cuando evalua mas de una persona: si un telefono manda
+ * los 72 clubes, los que no evaluo irian con cero y pisarian en la planilla el
+ * trabajo de otro. Mandando solo lo propio, cada uno actualiza su parte.
+ *
+ * La columna 0 de cada hoja lleva el ID del club a proposito: es la que usa el
+ * script de Google para saber que filas reemplazar y cuales dejar quietas.
+ */
+function hojasParaExportar({ soloConEscaneos = false } = {}) {
+  const todos = resultadosDeTodos().filter(t => !soloConEscaneos || t.escaneos.length);
   const fecha = new Date().toLocaleString('es-BO');
 
   // "Graves" son las que exigen revision humana: trampas y QR invalidos.
@@ -395,12 +405,12 @@ function hojasParaExportar() {
     ]),
   ];
 
-  const detalle = [['Club', 'Región', 'Orden', 'Código', 'Evento', 'Tipo', 'Estado', 'Puntos', 'Motivo', 'Evaluador', 'Fecha y hora', 'Código QR']];
-  const alertas = [['Club', 'Región', 'Nivel', 'Alerta']];
+  const detalle = [['ID', 'Club', 'Región', 'Orden', 'Código', 'Evento', 'Tipo', 'Estado', 'Puntos', 'Motivo', 'Evaluador', 'Fecha y hora', 'Código QR']];
+  const alertas = [['ID', 'Club', 'Región', 'Nivel', 'Alerta']];
   for (const { club, resultado } of todos) {
     for (const d of resultado.detalle) {
       detalle.push([
-        club.nombre, club.region, d.orden,
+        club.id, club.nombre, club.region, d.orden,
         d.evento?.codigo || '', d.evento?.nombre || '',
         d.evento ? etiquetaTipo(d.evento.tipo) : '',
         ESTADOS[d.estado].etiqueta, d.puntos, d.detalleTexto || '',
@@ -409,7 +419,7 @@ function hojasParaExportar() {
       ]);
     }
     for (const a of resultado.alertas) {
-      alertas.push([club.nombre, club.region, a.nivel === 'alerta' ? 'Grave' : 'Aviso', a.texto]);
+      alertas.push([club.id, club.nombre, club.region, a.nivel === 'alerta' ? 'Grave' : 'Aviso', a.texto]);
     }
   }
 
@@ -427,11 +437,13 @@ function hojasParaExportar() {
     ['Inventario de stickers', estado.inventario ? `${estado.inventario.size} seriales cargados` : 'NO cargado'],
   ];
 
+  // claveColumna le dice al script de Google por que columna fusionar. Las hojas
+  // sin clave (los parametros) se reescriben enteras en cada envio.
   return [
-    { nombre: 'Puntajes', filas: puntajes, anchos: [7, 26, 11, 20, 18, 26, 13, 13, 15, 15, 14, 10, 40, 13, 8, 12] },
-    { nombre: 'Detalle de escaneos', filas: detalle, anchos: [24, 11, 7, 8, 34, 11, 22, 8, 40, 16, 19, 24] },
-    { nombre: 'Alertas', filas: alertas, anchos: [24, 11, 8, 90] },
-    { nombre: 'Parámetros', filas: parametros, anchos: [30, 50] },
+    { nombre: 'Puntajes', filas: puntajes, claveColumna: 0, anchos: [7, 26, 11, 20, 18, 26, 13, 13, 15, 15, 14, 10, 40, 13, 8, 12] },
+    { nombre: 'Detalle de escaneos', filas: detalle, claveColumna: 0, anchos: [7, 24, 11, 7, 8, 34, 11, 22, 8, 40, 16, 19, 24] },
+    { nombre: 'Alertas', filas: alertas, claveColumna: 0, anchos: [7, 24, 11, 8, 90] },
+    { nombre: 'Parámetros', filas: parametros, reemplazar: true, anchos: [30, 50] },
   ];
 }
 
@@ -458,14 +470,26 @@ async function enviarASheets() {
   boton.textContent = 'Enviando…';
   mostrarEstadoSheets('', 'Subiendo los puntajes…');
 
-  // Sin el detalle son 72 filas; con el, unos cuantos miles. En una conexion
-  // floja conviene mandar solo lo primero.
-  const todas = hojasParaExportar();
+  // Mandamos solo los clubes que este telefono evaluo. Si mandaramos los 72, los
+  // que no tocamos irian con cero y borrarian en la planilla lo que cargo otro.
+  const todas = hojasParaExportar({ soloConEscaneos: true });
   const hojas = conDetalle ? todas : todas.filter(h => h.nombre === 'Puntajes' || h.nombre === 'Parámetros');
 
+  const mios = resultadosDeTodos().filter(t => t.escaneos.length);
+  if (!mios.length) {
+    boton.disabled = false;
+    boton.textContent = 'Enviar puntajes ahora';
+    mostrarEstadoSheets('aviso', 'Todavía no evaluaste ningún club en este teléfono, así que no hay nada que enviar.');
+    return;
+  }
+
   const r = await sheets.enviar(
-    { url, clave, dispositivo: estado.dispositivo || 'sin nombre' },
-    hojas.map(h => ({ nombre: h.nombre, filas: h.filas })),
+    {
+      url, clave,
+      dispositivo: estado.dispositivo || 'sin nombre',
+      clubes: mios.map(t => t.club.nombre).join(', '),
+    },
+    hojas.map(h => ({ nombre: h.nombre, filas: h.filas, claveColumna: h.claveColumna, reemplazar: h.reemplazar })),
     CAMPORI.nombre
   );
 

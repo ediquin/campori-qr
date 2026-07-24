@@ -125,11 +125,20 @@ Preparación, una sola vez:
 5. Copiá la dirección que termina en `/exec` y pegala en la app, en
    `Ajustes → Enviar a Google Sheets`, junto con la misma clave.
 
-Cada envío **reemplaza** el contenido de las hojas, no lo agrega al final: podés
-mandar los datos las veces que quieras sin que se dupliquen.
+Cada teléfono manda **solo los clubes que evaluó**, y en la planilla se fusionan por
+club: se reemplazan esas filas y se deja intacto todo lo demás. Por eso pueden mandar
+varios evaluadores a la misma planilla sin pisarse, y cada uno puede reenviar las
+veces que quiera sin duplicar nada. La hoja `Envíos` deja constancia de quién mandó
+qué y cuándo.
 
 La dirección y la clave se guardan **en el teléfono**, nunca en el repositorio. Quien
 tenga esa dirección puede escribir en tu planilla, así que no la publiques.
+
+> **La planilla no es sincronización.** Va en un solo sentido: teléfono → planilla.
+> Nunca vuelve nada a los celulares, y los celulares no se enteran de lo que cargó
+> otro. Para juntar los datos de verdad hay que pasar el archivo entre teléfonos
+> (Exportar / Importar), que además es lo único que permite cruzar los stickers entre
+> clubes que evaluaron personas distintas.
 
 ---
 

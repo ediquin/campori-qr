@@ -17,7 +17,7 @@
  * @param {Array<{nombre: string, filas: Array<Array>}>} hojas
  * @returns {Promise<{ok: boolean, hojas?: string[], error?: string}>}
  */
-export async function enviar({ url, clave, dispositivo = '' }, hojas, campori = '') {
+export async function enviar({ url, clave, dispositivo = '', clubes = '' }, hojas, campori = '') {
   if (!url) return { ok: false, error: 'Falta la dirección del script' };
   if (!/^https:\/\/script\.google\.com\/.*\/exec$/.test(url.trim())) {
     return {
@@ -27,7 +27,11 @@ export async function enviar({ url, clave, dispositivo = '' }, hojas, campori = 
     };
   }
 
-  const cuerpo = JSON.stringify({ clave, campori, dispositivo, enviado: new Date().toISOString(), hojas });
+  const cuerpo = JSON.stringify({
+    clave, campori, dispositivo, clubes,
+    enviado: new Date().toISOString(),
+    hojas,
+  });
 
   try {
     const respuesta = await fetch(url.trim(), {

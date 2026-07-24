@@ -16,6 +16,7 @@ const SUITES = [
   ['Generador de codigos QR', 'pruebas-qr.mjs'],
   ['Lector de codigos QR (el que usan los iPhone)', 'pruebas-decoder.mjs'],
   ['Exportacion a Excel', 'pruebas-exportar.mjs'],
+  ['Fusion de envios a Google Sheets', 'pruebas-sheets.mjs'],
   ['Escenario completo sobre el club de prueba', 'pruebas-escenario.mjs'],
 ];
 
