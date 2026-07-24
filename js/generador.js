@@ -7,6 +7,8 @@ import {
 import { armarSticker } from './codigo.js';
 import { generarMatriz, matrizASvg } from './qr-encoder.js?v=2';
 import { crearIdentificador } from './identificador.js';
+import { crearPdfStickers } from './pdf-stickers.js';
+import { descargar } from './exportar.js';
 
 const $ = sel => document.querySelector(sel);
 const $$ = sel => [...document.querySelectorAll(sel)];
@@ -19,6 +21,7 @@ const FILAS_POR_HOJA = 17;
 const STICKERS_POR_HOJA = COLUMNAS_POR_HOJA * FILAS_POR_HOJA;
 const LADO_QR_STICKER = 15;
 const CLAVE_SERIALES = `campori-qr-unicos-${CAMPORI.prefijo}`;
+let ultimaGeneracion = null;
 
 // Este registro es interno y automático. No se descarga ni se carga: solamente
 // evita repetir en este navegador uno de los identificadores aleatorios ya creados.
@@ -111,30 +114,59 @@ async function generarStickers() {
   }
 
   const aImprimir = [];
+  const gruposPdf = [];
   for (const codigo of codigos) {
     const evento = buscarEvento(codigo);
+    const puntos = evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO;
+    const grupoPdf = {
+      codigo: evento.codigo,
+      nombre: evento.nombre,
+      puntos,
+      stickers: [],
+    };
     for (let i = 0; i < cantidad; i++) {
+      const serial = nuevoSerial(codigo);
+      const texto = armarSticker(evento.codigo, puntos, serial);
       aImprimir.push({
         evento,
-        serial: nuevoSerial(codigo),
-        puntos: evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO,
+        serial,
+        puntos,
+        texto,
       });
+      grupoPdf.stickers.push({ serial, texto });
     }
+    gruposPdf.push(grupoPdf);
   }
   guardarSeriales();
 
   const barra = $('#progreso');
-  barra.style.display = '';
-  const piezas = await porTandas(aImprimir, 40, ({ evento, serial, puntos }) => {
-    const texto = armarSticker(evento.codigo, puntos, serial);
-    return `<div class="sticker">
-      ${svgDe(texto, LADO_QR_STICKER)}
-      <div class="pie">${evento.codigo}·${puntos}<span class="serial"> ${serial}</span></div>
-    </div>`;
-  }, (hechos, total) => {
-    barra.textContent = `Dibujando códigos QR… ${hechos} de ${total}`;
-  });
-  barra.style.display = 'none';
+  barra.style.display = 'block';
+  $('#generar-stickers').disabled = true;
+  $('#descargar-pdf').disabled = true;
+  $('#imprimir').disabled = true;
+  $('#limpiar').disabled = true;
+  let piezas;
+  try {
+    piezas = await porTandas(aImprimir, 40, ({ evento, serial, puntos, texto }) => {
+      return `<div class="sticker">
+        ${svgDe(texto, LADO_QR_STICKER)}
+        <div class="pie">${evento.codigo}·${puntos}<span class="serial"> ${serial}</span></div>
+      </div>`;
+    }, (hechos, total) => {
+      barra.textContent = `Dibujando códigos QR… ${hechos} de ${total}`;
+    });
+  } catch (error) {
+    console.error(error);
+    const disponible = Boolean(ultimaGeneracion);
+    $('#descargar-pdf').disabled = !disponible;
+    $('#imprimir').disabled = !disponible;
+    $('#limpiar').disabled = !disponible;
+    alert(`No se pudieron generar los QR: ${error.message}`);
+    return;
+  } finally {
+    barra.style.display = 'none';
+    $('#generar-stickers').disabled = false;
+  }
 
   const hojas = [];
   let indice = 0;
@@ -156,14 +188,55 @@ async function generarStickers() {
     }
   }
 
-  mostrar(hojas.join(''), `${aImprimir.length} QR únicos en ${hojas.length} hojas`);
+  ultimaGeneracion = { campori: CAMPORI.nombre, grupos: gruposPdf };
+  const descripcion =
+    `${aImprimir.length} QR ${aImprimir.length === 1 ? 'único' : 'únicos'} en ` +
+    `${hojas.length} hoja${hojas.length === 1 ? '' : 's'}`;
+  mostrar(hojas.join(''), descripcion);
 }
 
 function mostrar(html, descripcion) {
   $('#salida').innerHTML = html;
   $('#estado-salida').textContent = descripcion;
-  $('#barra-impresion').style.display = '';
-  $('#salida').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('#descargar-pdf').disabled = false;
+  $('#imprimir').disabled = false;
+  $('#limpiar').disabled = false;
+}
+
+function hoy() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function descargarPdf() {
+  if (!ultimaGeneracion) return;
+  const generacion = ultimaGeneracion;
+  const boton = $('#descargar-pdf');
+  boton.disabled = true;
+  $('#generar-stickers').disabled = true;
+  $('#imprimir').disabled = true;
+  $('#limpiar').disabled = true;
+  $('#estado-salida').textContent = 'Creando PDF vectorial…';
+  try {
+    const pdf = await crearPdfStickers(generacion, {
+      alAvanzar: ({ hechos, total, pagina, paginas }) => {
+        $('#estado-salida').textContent =
+          `Creando PDF… ${hechos}/${total} QR · hoja ${pagina}/${paginas}`;
+      },
+    });
+    descargar(pdf, `stickers-campori-${hoy()}.pdf`);
+    const total = generacion.grupos.reduce((n, grupo) => n + grupo.stickers.length, 0);
+    $('#estado-salida').textContent = `PDF descargado · ${total} QR`;
+  } catch (error) {
+    console.error(error);
+    $('#estado-salida').textContent = 'No se pudo crear el PDF';
+    alert(`No se pudo crear el PDF: ${error.message}`);
+  } finally {
+    const disponible = Boolean(ultimaGeneracion);
+    $('#generar-stickers').disabled = false;
+    boton.disabled = !disponible;
+    $('#imprimir').disabled = !disponible;
+    $('#limpiar').disabled = !disponible;
+  }
 }
 
 pintarSelectorEventos();
@@ -171,9 +244,13 @@ actualizarConteo();
 
 $('#cantidad').addEventListener('input', actualizarConteo);
 $('#generar-stickers').addEventListener('click', generarStickers);
+$('#descargar-pdf').addEventListener('click', descargarPdf);
 $('#imprimir').addEventListener('click', () => window.print());
 $('#limpiar').addEventListener('click', () => {
+  ultimaGeneracion = null;
   $('#salida').innerHTML = '';
-  $('#estado-salida').textContent = '';
-  $('#barra-impresion').style.display = 'none';
+  $('#estado-salida').textContent = 'Primero generá las hojas de stickers';
+  $('#descargar-pdf').disabled = true;
+  $('#imprimir').disabled = true;
+  $('#limpiar').disabled = true;
 });

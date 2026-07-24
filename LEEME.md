@@ -56,8 +56,10 @@ Cada hoja oficio (21,5 × 33 cm) trae hasta 204 QR de 15 mm de un mismo evento,
 listos para recortar y darle al juez de esa estación. La página no genera fichas ni pide inventarios.
 Cada nueva generación crea identificadores aleatorios distintos.
 
-Papel: hoja autoadhesiva oficio de 21,5 × 33 cm. Imprimí o guardá como PDF
-**al 100%, sin "ajustar a página"**, o los 15 mm dejan de ser 15 mm.
+Después de generar, tocá **Descargar PDF**. El archivo ya sale en hoja oficio de
+21,5 × 33 cm, con cada QR vectorial de 15 mm. También podés usar **Imprimir**;
+en ese caso hacelo **al 100%, sin "ajustar a página"**, o los 15 mm dejan de ser
+15 mm.
 
 ### 3. Durante el campamento
 
@@ -248,7 +250,7 @@ redundancia disponible y conserva el patrón de alineación para leerlo inclinad
 
 ## Las pruebas
 
-378 comprobaciones, sin framework:
+405 comprobaciones, sin framework:
 
 - **Núcleo** — la firma coincide con `crypto` de Node; se rechazan QR alterados en
   cualquier campo; el motor de puntaje cumple las reglas y detecta cada trampa.
@@ -268,6 +270,8 @@ redundancia disponible y conserva el patrón de alineación para leerlo inclinad
   hasta 11 bytes rotos y que **nunca inventa datos** cuando el daño la supera.
 - **Exportación** — el `.xlsx` se vuelve a abrir y se comprueba que los CRC del zip
   y los datos (acentos, comillas, números, celdas vacías) estén intactos.
+- **PDF de stickers** — comprueba hoja oficio de 215 × 330 mm, paginación de
+  204 QR, dibujo vectorial, estructura `xref` y longitudes de cada flujo.
 - **Google Sheets** — verifica que varios evaluadores puedan actualizar clubes
   distintos sin pisarse y que los seriales con más de un club se conserven completos.
 - **Escenario completo** — una ficha realista del club de prueba `ediquin`, con sus

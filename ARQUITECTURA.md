@@ -306,7 +306,7 @@ porque es exactamente el tipo de cosa que alguien "limpia" y rompe.
 ```
 Páginas
   index.html            menú
-  generador.html        genera e imprime QR de eventos
+  generador.html        genera, descarga en PDF e imprime QR de eventos
   evaluador.html        app de escaneo
   kit-prueba.html       ensayo completo con trampas incluidas
   prueba-camara.html    diagnóstico de cámara por dispositivo
@@ -319,6 +319,7 @@ Núcleo (el orden importa: de arriba abajo, cada uno usa a los de arriba)
   js/codigo.js          formato y firma de los QR, con caché de lecturas
   js/puntaje.js         las reglas. Función pura.
   js/qr-encoder.js      genera los símbolos QR
+  js/pdf-stickers.js    arma hojas oficio con QR vectoriales de 15 mm
   js/qr-decoder.js      los lee desde la imagen de la cámara
   js/escaner.js         cámara, elección de motor, sonido y vibración
   js/almacen.js         IndexedDB
@@ -341,7 +342,7 @@ Herramientas (Node, sin dependencias)
 
 ## 9. Estrategia de pruebas
 
-`node herramientas/pruebas.mjs` — **378 comprobaciones**, sin framework.
+`node herramientas/pruebas.mjs` — **405 comprobaciones**, sin framework.
 
 El criterio: cada suite tiene que probar contra algo **independiente**, no contra sí
 misma.
@@ -352,6 +353,7 @@ misma.
 | `pruebas-qr.mjs` | Formato e información de versión contra las **tablas publicadas de ISO/IEC 18004**. Cada código se decodifica leyendo la matriz como un escáner, y se verifican los **síndromes de Reed-Solomon**: si dan cero, la corrección es matemáticamente correcta. |
 | `pruebas-decoder.mjs` | Imágenes sintéticas con degradaciones deliberadas y geometría del recorte central que excluye QR vecinos. La perspectiva se aplica con una homografía resuelta por **eliminación gaussiana**, método distinto del que usa el lector: si compartieran implementación, un error se cancelaría. |
 | `pruebas-exportar.mjs` | El `.xlsx` se reabre y se comprueban los **CRC del ZIP** y los datos (acentos, comillas, signos de XML, números, celdas vacías). |
+| `pruebas-pdf.mjs` | El PDF declara 215 × 330 mm, pagina en bloques de 204, usa QR vectoriales y mantiene válidos `xref` y `/Length`. |
 | `pruebas-sheets.mjs` | La regla de fusión, incluido el caso que rompía (mandar clubes no evaluados), y que un serial presente en dos clubes deje a ambos en conflicto. |
 | `pruebas-escenario.mjs` | Una ficha realista del club `ediquin` con sus cinco trampas. Imprime un informe legible. |
 

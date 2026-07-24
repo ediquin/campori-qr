@@ -23,11 +23,19 @@
   .panel h3 button { padding: 3px 9px; font-size: .7rem; font-weight: 500; }
 
   #barra-impresion {
-    position: sticky; bottom: 0; z-index: 10;
-    display: none; gap: 12px; align-items: center; flex-wrap: wrap;
+    position: sticky; top: 76px; z-index: 15;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
     background: #141b33f2; backdrop-filter: blur(8px);
     border: 1px solid var(--borde); border-radius: var(--radio);
     padding: 12px 16px; margin-bottom: 16px; box-shadow: var(--sombra);
+  }
+  #barra-impresion .estado-descarga {
+    display: flex; flex-direction: column; gap: 2px; flex: 1 1 280px;
+  }
+  @media (max-width: 600px) {
+    #barra-impresion { top: 72px; }
+    #barra-impresion .estado-descarga { flex-basis: 100%; }
+    #barra-impresion button { flex: 1 1 125px; }
   }
   #progreso {
     display: none; padding: 10px 14px; border-radius: 9px;
@@ -45,10 +53,20 @@
 
 <header class="principal no-imprimir">
   <h1>Generador de códigos QR</h1>
-  <p>Generá e imprimí los QR únicos de cada evento</p>
+  <p>Generá, descargá en PDF o imprimí los QR únicos de cada evento</p>
 </header>
 
 <main>
+  <div id="barra-impresion" class="no-imprimir">
+    <div class="estado-descarga">
+      <strong id="estado-salida">Primero generá las hojas de stickers</strong>
+      <span class="chico tenue">El PDF será oficio (21,5 × 33 cm) y conservará cada QR en 1,5 cm.</span>
+    </div>
+    <button class="principal" id="descargar-pdf" disabled>Descargar PDF</button>
+    <button id="imprimir" disabled>Imprimir</button>
+    <button id="limpiar" disabled>Borrar vista previa</button>
+  </div>
+
   <div class="no-imprimir">
 
     <section class="panel">
@@ -83,16 +101,9 @@
 
   <div id="progreso" class="no-imprimir"></div>
 
-  <div id="barra-impresion" class="no-imprimir">
-    <strong id="estado-salida"></strong>
-    <span style="flex:1 1 auto"></span>
-    <button class="principal" id="imprimir">Imprimir / guardar PDF</button>
-    <button id="limpiar">Borrar vista previa</button>
-  </div>
-
   <div id="salida"></div>
 </main>
 
-<script type="module" src="js/generador.js?v=5"></script>
+<script type="module" src="js/generador.js?v=6"></script>
 </body>
 </html>

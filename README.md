@@ -16,7 +16,7 @@ JavaScript que el navegador abre tal cual. Funciona sin señal.
 | | Para qué |
 |---|---|
 | [`index.html`](index.html) | Menú y explicación general |
-| [`generador.html`](generador.html) | Genera e imprime únicamente los QR de los eventos |
+| [`generador.html`](generador.html) | Genera, descarga en PDF e imprime los QR de los eventos |
 | [`evaluador.html`](evaluador.html) | Escanea las fichas con la cámara y arma el puntaje |
 | [`kit-prueba.html`](kit-prueba.html) | Ensayo completo con trampas incluidas, antes del campori |
 | [`prueba-camara.html`](prueba-camara.html) | Verifica que la cámara de cada celular lea bien |
@@ -37,7 +37,7 @@ eventos repetidos, stickers fotocopiados y stickers prestados entre clubes.
 
 ```bash
 node herramientas/servidor.mjs      # http://localhost:8080
-node herramientas/pruebas.mjs       # 378 comprobaciones
+node herramientas/pruebas.mjs       # 405 comprobaciones
 node herramientas/generar-clubes.mjs  # regenera el padrón desde el Excel
 ```
 
