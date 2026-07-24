@@ -568,14 +568,14 @@ function leerFormato(modulos, tamano) {
   const copias = [0, 0];
   for (let i = 0; i < 15; i++) {
     let bit;
-    if (i < 6) bit = modulos[8][i];
-    else if (i === 6) bit = modulos[8][7];
+    if (i < 6) bit = modulos[i][8];
+    else if (i === 6) bit = modulos[7][8];
     else if (i === 7) bit = modulos[8][8];
-    else if (i === 8) bit = modulos[7][8];
-    else bit = modulos[14 - i][8];
+    else if (i === 8) bit = modulos[8][7];
+    else bit = modulos[8][14 - i];
     copias[0] |= bit << i;
 
-    const bit2 = i < 8 ? modulos[tamano - 1 - i][8] : modulos[8][tamano - 15 + i];
+    const bit2 = i < 8 ? modulos[8][tamano - 1 - i] : modulos[tamano - 15 + i][8];
     copias[1] |= bit2 << i;
   }
 

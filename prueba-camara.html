@@ -100,8 +100,8 @@
 import { CAMPORI } from './js/catalogo.js';
 import { armarSticker, armarQrClub, leerQr } from './js/codigo.js';
 import { buscarEvento } from './js/catalogo.js';
-import { generarMatriz, matrizASvg } from './js/qr-encoder.js';
-import { Escaner, VERSION_LECTOR, pitido, vibrar, activarSonido } from './js/escaner.js?v=4';
+import { generarMatriz, matrizASvg } from './js/qr-encoder.js?v=2';
+import { Escaner, VERSION_LECTOR, pitido, vibrar, activarSonido } from './js/escaner.js?v=5';
 
 const $ = s => document.querySelector(s);
 const escapar = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

@@ -49,11 +49,11 @@ grupo('Informacion de formato y version contra la norma');
     let leido = 0;
     for (let i = 0; i < 15; i++) {
       let bit;
-      if (i < 6) bit = modulos[8][i];
-      else if (i === 6) bit = modulos[8][7];
+      if (i < 6) bit = modulos[i][8];
+      else if (i === 6) bit = modulos[7][8];
       else if (i === 7) bit = modulos[8][8];
-      else if (i === 8) bit = modulos[7][8];
-      else bit = modulos[14 - i][8];
+      else if (i === 8) bit = modulos[8][7];
+      else bit = modulos[8][14 - i];
       leido |= bit << i;
     }
     comprobar(`formato escrito en nivel ${nivel} figura en la tabla oficial`,
@@ -63,11 +63,11 @@ grupo('Informacion de formato y version contra la norma');
     // que la norma obliga a dejar en 1.
     let copia2 = 0;
     for (let i = 0; i < 15; i++) {
-      const bit = i < 8 ? modulos[tamano - 1 - i][8] : modulos[8][tamano - 15 + i];
+      const bit = i < 8 ? modulos[8][tamano - 1 - i] : modulos[tamano - 15 + i][8];
       copia2 |= bit << i;
     }
     comprobar(`las dos copias del formato coinciden (nivel ${nivel})`,
-      copia2 & ~(1 << 7), leido & ~(1 << 7));
+      copia2, leido);
   }
 }
 
@@ -145,11 +145,11 @@ function decodificar(matriz) {
   let formato = 0;
   for (let i = 0; i < 15; i++) {
     let bit;
-    if (i < 6) bit = modulos[8][i];
-    else if (i === 6) bit = modulos[8][7];
+    if (i < 6) bit = modulos[i][8];
+    else if (i === 6) bit = modulos[7][8];
     else if (i === 7) bit = modulos[8][8];
-    else if (i === 8) bit = modulos[7][8];
-    else bit = modulos[14 - i][8];
+    else if (i === 8) bit = modulos[8][7];
+    else bit = modulos[8][14 - i];
     formato |= bit << i;
   }
   const datosFormato = (formato ^ 0b101010000010010) >> 10;

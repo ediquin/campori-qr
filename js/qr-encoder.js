@@ -331,18 +331,20 @@ export function generarMatriz(texto, { nivel = 'Q', versionMinima = 1 } = {}) {
     for (let i = 0; i < 15; i++) {
       const bit = (formato >> i) & 1;
       // Copia 1, alrededor del buscador superior izquierdo.
-      if (i < 6) m[8][i] = bit;
-      else if (i === 6) m[8][7] = bit;
+      // La matriz se indexa [fila][columna], aunque la norma escribe (x, y).
+      // Mantener ese orden es esencial: transponer este patrón produce un QR que
+      // parece normal, pero que un lector estándar rechaza.
+      if (i < 6) m[i][8] = bit;
+      else if (i === 6) m[7][8] = bit;
       else if (i === 7) m[8][8] = bit;
-      else if (i === 8) m[7][8] = bit;
-      else m[14 - i][8] = bit;
+      else if (i === 8) m[8][7] = bit;
+      else m[8][14 - i] = bit;
       // Copia 2, repartida entre los otros dos buscadores.
-      if (i < 8) m[tamano - 1 - i][8] = bit;
-      else m[8][tamano - 15 + i] = bit;
+      if (i < 8) m[8][tamano - 1 - i] = bit;
+      else m[tamano - 15 + i][8] = bit;
     }
-    // El módulo oscuro fijo comparte coordenada con la zona donde se copia el
-    // formato. La norma exige que quede siempre encendido, independientemente de
-    // la máscara elegida. Reafirmarlo acá evita QR que algunos lectores rechazan.
+    // El módulo oscuro fijo no forma parte de la información de formato. La norma
+    // exige que quede siempre encendido, independientemente de la máscara elegida.
     m[tamano - 8][8] = 1;
 
     if (version >= 7) {

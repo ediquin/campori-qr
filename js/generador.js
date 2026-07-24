@@ -5,7 +5,7 @@ import {
   EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES, buscarEvento,
 } from './catalogo.js';
 import { armarSticker } from './codigo.js';
-import { generarMatriz, matrizASvg } from './qr-encoder.js';
+import { generarMatriz, matrizASvg } from './qr-encoder.js?v=2';
 import { crearIdentificador } from './identificador.js';
 
 const $ = sel => document.querySelector(sel);

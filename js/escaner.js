@@ -12,9 +12,9 @@
 // Importante: la camara solo se abre en HTTPS o en localhost. Abrir el archivo con
 // doble clic no alcanza.
 
-import { decodificar } from './qr-decoder.js';
+import { decodificar } from './qr-decoder.js?v=2';
 
-export const VERSION_LECTOR = '4 · rápido y tolerante';
+export const VERSION_LECTOR = '5 · QR estándar y tolerante';
 
 // Con el lector propio conviene trabajar sobre una imagen mas chica que la del video:
 // alcanza y sobra para un codigo que ocupa buena parte del cuadro, y baja mucho el
