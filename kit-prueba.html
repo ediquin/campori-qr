@@ -34,21 +34,32 @@
 
 <header class="principal no-imprimir">
   <h1>Kit de prueba</h1>
-  <p>Un ensayo completo del sistema, de punta a punta, sin tocar datos de clubes reales</p>
+  <p>Un ensayo completo del sistema, de punta a punta, con el club que elijas</p>
 </header>
 
 <main>
   <section class="panel no-imprimir">
     <h2>Qué es esto</h2>
     <p class="chico tenue" style="margin-top:-6px">
-      Dos hojas para imprimir: la ficha del club de prueba <strong>ediquin</strong> y los
-      stickers para pegarle. Los stickers no son de relleno — cada uno dispara una
-      situación distinta, incluidas las tres trampas que el sistema tiene que cazar.
-      Así comprobás el circuito real (imprimir → pegar → escanear → Excel) antes del campori.
+      Elegí cualquier club y el sistema preparará dos hojas: su ficha de ensayo y una
+      tanda de stickers exclusiva para esa prueba. Los stickers no son de relleno —
+      cada uno dispara una situación distinta, incluidas las tres trampas que el
+      sistema tiene que cazar.
     </p>
+    <div class="fila" style="margin:14px 0">
+      <div style="flex:1 1 360px">
+        <label for="club-kit">Club para esta prueba</label>
+        <select id="club-kit"></select>
+      </div>
+    </div>
     <div class="aviso-caja">
       Si no tenés impresora, sirve igual: escaneá los códigos directamente
       <strong>desde la pantalla</strong> con el celular. Se leen perfecto.
+    </div>
+    <div class="aviso-caja alerta" style="margin-top:10px">
+      Cada club recibe seriales de prueba diferentes. Si cambiás el club, descargá
+      nuevamente el inventario antes de escanear. Si enviás el resultado a Sheets,
+      hacelo en la planilla de prueba: aparecerá como la evaluación de ese club.
     </div>
   </section>
 
@@ -61,13 +72,15 @@
         el evaluador, en <code>Ajustes → Inventario de stickers</code>. Sin ese paso, la
         trampa del serial falsificado no se detecta.</li>
       <li>Abrí <a href="evaluador.html">el evaluador</a> y escaneá <strong>el QR de la
-        cabecera de la ficha</strong>. Tiene que abrir solo el club <em>ediquin</em>.</li>
+        cabecera de la ficha</strong>. Tiene que abrir el club
+        <em class="club-kit-nombre">—</em>.</li>
       <li>Escaneá los stickers <strong>en el orden en que están impresos</strong>. Fijate
         que cada uno suene distinto según sea válido o trampa.</li>
       <li>Comparalo con el resultado esperado que está acá abajo. Tiene que dar
         <strong id="total-esperado">—</strong> puntos.</li>
       <li>Andá a <code>Resultados → Descargar Excel</code> y abrí la planilla.</li>
-      <li>Cuando termines, en el evaluador entrá a <em>ediquin</em> y tocá
+      <li>Cuando termines, en el evaluador entrá a
+        <em class="club-kit-nombre">—</em> y tocá
         <code>Borrar todos los escaneos</code> para dejarlo limpio.</li>
     </ol>
   </section>

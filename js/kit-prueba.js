@@ -6,7 +6,7 @@ import {
   CAMPORI, REGLAS, PUNTOS_EVENTO,
   EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES, buscarEvento,
 } from './catalogo.js';
-import { CLUB_PRUEBA, buscarClub } from './clubes.js';
+import { CLUBES, CLUB_PRUEBA, buscarClub } from './clubes.js';
 import { armarSticker, armarQrClub } from './codigo.js';
 import { generarMatriz, matrizASvg } from './qr-encoder.js';
 import { calcular } from './puntaje.js';
@@ -15,52 +15,67 @@ const $ = s => document.querySelector(s);
 const escapar = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const svgDe = (texto, lado) => matrizASvg(generarMatriz(texto, { nivel: 'Q' }), { lado, margen: 4 });
 
-const club = buscarClub(CLUB_PRUEBA);
+let club = buscarClub(CLUB_PRUEBA);
 
 // ------------------------------------------------------------------ el guion
 
 // Cada entrada es un sticker del kit. `esperado` es lo que tiene que pasar al
 // escanearlo, y se usa tanto para el rotulo impreso como para la comprobacion
 // automatica que corre esta misma pagina.
-const GUION = [
-  ...EVENTOS_FISICOS.slice(0, 8).map((e, i) => ({
-    codigo: e.codigo, serial: i + 1, grupo: 'Los 8 eventos físicos',
-    esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
-  })),
-  {
-    codigo: 'F03', serial: 99, grupo: 'Trampas',
-    esperado: 'repetido', nota: 'Evento repetido: no suma',
-    explicacion: 'Es otro sticker de un evento que el club ya hizo. La app lo marca en rojo.',
-  },
-  {
-    codigo: 'F09', serial: 1, grupo: 'Trampas',
-    esperado: 'excedente', nota: 'Noveno físico: no suma',
-    explicacion: 'Pasado el cupo de 8, la app avisa y no lo cuenta.',
-  },
-  {
-    codigo: 'F12', serial: 9876, grupo: 'Trampas',
-    esperado: 'no_inventariado', nota: 'Serial que no imprimimos',
-    explicacion: 'Está bien firmado pero su serial no figura en el inventario. Solo se detecta si cargaste el inventario en Ajustes.',
-  },
-  ...EVENTOS_ESPIRITUALES.map((e, i) => ({
-    codigo: e.codigo, serial: i + 1, grupo: 'Los 7 espirituales (obligatorios)',
-    esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
-  })),
-  {
-    codigo: CRITERIOS_ADICIONALES[0].codigo, serial: 1, grupo: 'Puntaje adicional',
-    esperado: 'contado', nota: `+${CRITERIOS_ADICIONALES[0].puntos}`,
-  },
-];
+function crearGuion(clubElegido) {
+  // El rango 5000–9072 queda reservado para ensayos. El índice del club hace que
+  // Aziel, ediquin y cualquier otro reciban stickers diferentes aunque correspondan
+  // a los mismos eventos. El QR sigue sin llevar el club: solo cambia su serial.
+  const indice = CLUBES.findIndex(c => c.id === clubElegido.id) + 1;
+  const base = 5000 + indice;
+  return [
+    ...EVENTOS_FISICOS.slice(0, 8).map((e, i) => ({
+      codigo: e.codigo, serial: base + i, grupo: 'Los 8 eventos físicos',
+      esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
+    })),
+    {
+      codigo: 'F03', serial: 6000 + indice, grupo: 'Trampas',
+      esperado: 'repetido', nota: 'Evento repetido: no suma',
+      explicacion: 'Es otro sticker de un evento que el club ya hizo. La app lo marca en rojo.',
+    },
+    {
+      codigo: 'F09', serial: base + 8, grupo: 'Trampas',
+      esperado: 'excedente', nota: 'Noveno físico: no suma',
+      explicacion: 'Pasado el cupo de 8, la app avisa y no lo cuenta.',
+    },
+    {
+      codigo: 'F12', serial: 9000 + indice, grupo: 'Trampas',
+      esperado: 'no_inventariado', nota: 'Serial que no imprimimos',
+      explicacion: 'Está bien firmado pero su serial no figura en el inventario. Solo se detecta si cargaste el inventario en Ajustes.',
+    },
+    ...EVENTOS_ESPIRITUALES.map((e, i) => ({
+      codigo: e.codigo, serial: base + i, grupo: 'Los 7 espirituales (obligatorios)',
+      esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
+    })),
+    {
+      codigo: CRITERIOS_ADICIONALES[0].codigo, serial: base,
+      grupo: 'Puntaje adicional', esperado: 'contado',
+      nota: `+${CRITERIOS_ADICIONALES[0].puntos}`,
+    },
+  ];
+}
+
+let GUION = crearGuion(club);
 
 // El inventario del kit: todo lo que "imprimimos" de verdad. El sticker de serial
 // 9876 queda afuera a proposito, que es lo que lo delata.
-const inventario = {
-  campori: CAMPORI.prefijo,
-  generado: new Date().toISOString(),
-  stickers: GUION
-    .filter(s => s.esperado !== 'no_inventariado')
-    .map(s => `${s.codigo}-${String(s.serial).padStart(4, '0')}`),
-};
+function crearInventario() {
+  return {
+    campori: CAMPORI.prefijo,
+    generado: new Date().toISOString(),
+    clubPrueba: club.id,
+    stickers: GUION
+      .filter(s => s.esperado !== 'no_inventariado')
+      .map(s => `${s.codigo}-${String(s.serial).padStart(4, '0')}`),
+  };
+}
+
+let inventario = crearInventario();
 
 // ------------------------------------------------------------------ resultado esperado
 
@@ -107,7 +122,7 @@ function hojaFicha() {
       <div class="evento">
         <strong>${escapar(CAMPORI.nombre)}</strong><br>
         FICHA DE ENSAYO<br>
-        No es de un club real
+        Datos de prueba
       </div>
     </div>
 
@@ -202,7 +217,7 @@ function bajarInventario() {
   const blob = new Blob([JSON.stringify(inventario, null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'inventario-kit-de-prueba.json';
+  a.download = `inventario-kit-${club.id}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -211,7 +226,26 @@ function bajarInventario() {
 
 // ------------------------------------------------------------------ arranque
 
-pintarGuion();
-$('#salida').innerHTML = hojaFicha() + hojaStickers();
+function pintarKit() {
+  pintarGuion();
+  $('#salida').innerHTML = hojaFicha() + hojaStickers();
+  document.querySelectorAll('.club-kit-nombre').forEach(el => {
+    el.textContent = club.nombre;
+  });
+}
+
+$('#club-kit').innerHTML = CLUBES.map(c =>
+  `<option value="${c.id}"${c.id === club.id ? ' selected' : ''}>` +
+  `${escapar(c.nombre)} · ${escapar(c.region)} (${c.id})</option>`
+).join('');
+
+$('#club-kit').addEventListener('change', e => {
+  club = buscarClub(e.target.value);
+  GUION = crearGuion(club);
+  inventario = crearInventario();
+  pintarKit();
+});
+
+pintarKit();
 $('#imprimir').addEventListener('click', () => window.print());
 $('#bajar-inventario').addEventListener('click', bajarInventario);

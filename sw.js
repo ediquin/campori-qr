@@ -7,7 +7,7 @@
 // seria mas rapido, pero durante el armado del sistema conviene que cada recarga traiga
 // la version nueva sin tener que andar limpiando cache a mano.
 
-const CACHE = 'campori-qr-v7';
+const CACHE = 'campori-qr-v8';
 
 const ARCHIVOS = [
   './',
