@@ -146,9 +146,52 @@ function registrarEnvio(libro, datos, resumen) {
   ]);
 }
 
-/** Permite probar la conexion desde el navegador antes de mandar datos. */
-function doGet() {
-  return responder({ ok: true, mensaje: 'El script está publicado y responde.' });
+/**
+ * Lectura. Sin parametros solo confirma que el script vive, para el boton
+ * "Probar conexion".
+ *
+ * Con ?accion=seriales&clave=... devuelve que sticker uso cada club, segun lo que
+ * ya cargaron todos los telefonos. Es lo que permite detectar un sticker despegado
+ * de una ficha y pegado en otra cuando los dos clubes los evaluaron personas
+ * distintas: sin esto, cada telefono solo conoce lo suyo y la trampa pasa.
+ */
+function doGet(peticion) {
+  const parametros = (peticion && peticion.parameter) || {};
+
+  if (parametros.accion !== 'seriales') {
+    return responder({ ok: true, mensaje: 'El script está publicado y responde.' });
+  }
+  if (parametros.clave !== CLAVE) {
+    return responder({ ok: false, error: 'Clave incorrecta' });
+  }
+
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Detalle de escaneos');
+  if (!hoja || hoja.getLastRow() < 2) {
+    return responder({ ok: true, seriales: {}, clubes: 0 });
+  }
+
+  const valores = hoja.getRange(1, 1, hoja.getLastRow(), hoja.getLastColumn()).getValues();
+  const encabezado = valores[0].map(function (v) { return String(v).trim(); });
+  const colId = encabezado.indexOf('ID');
+  const colQr = encabezado.indexOf('Código QR');
+  if (colId < 0 || colQr < 0) {
+    return responder({ ok: false, error: 'La hoja "Detalle de escaneos" no tiene las columnas ID y Código QR' });
+  }
+
+  // Devolvemos el codigo QR completo y no solo el serial: quien lee ya sabe
+  // interpretarlo, y asi el script no necesita conocer el formato.
+  const seriales = {};
+  const clubes = {};
+  for (let i = 1; i < valores.length; i++) {
+    const id = String(valores[i][colId]).trim();
+    const qr = String(valores[i][colQr]).trim();
+    if (!id || !qr) continue;
+    // El primero que aparece se queda con el sticker; los siguientes son la trampa.
+    if (!seriales[qr]) seriales[qr] = id;
+    clubes[id] = true;
+  }
+
+  return responder({ ok: true, seriales: seriales, clubes: Object.keys(clubes).length });
 }
 
 function responder(objeto) {

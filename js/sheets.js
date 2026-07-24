@@ -69,6 +69,35 @@ export async function enviar({ url, clave, dispositivo = '', clubes = '' }, hoja
   }
 }
 
+/**
+ * Trae de la planilla que sticker uso cada club, segun lo que ya cargaron todos
+ * los telefonos.
+ *
+ * Es lo que permite detectar un sticker despegado de una ficha y pegado en otra
+ * cuando esos dos clubes los evaluaron personas distintas. Sin esto cada telefono
+ * solo conoce lo suyo y esa trampa pasa sin que nadie se entere.
+ *
+ * @returns {Promise<{ok: boolean, seriales?: Object, clubes?: number, error?: string}>}
+ *          seriales es un objeto { "AV5-F03-200-0147-K7M2": "C012", ... }
+ */
+export async function traerSeriales(url, clave) {
+  if (!url) return { ok: false, error: 'Falta la dirección del script' };
+  try {
+    const direccion = new URL(url.trim());
+    direccion.searchParams.set('accion', 'seriales');
+    direccion.searchParams.set('clave', clave || '');
+    const respuesta = await fetch(direccion.toString(), { method: 'GET', redirect: 'follow' });
+    const texto = await respuesta.text();
+    try {
+      return JSON.parse(texto);
+    } catch {
+      return { ok: false, error: 'El script devolvió una página de Google en vez de datos.' };
+    }
+  } catch (e) {
+    return { ok: false, error: `No se pudo consultar: ${e.message}` };
+  }
+}
+
 /** Comprueba que el script esté publicado, sin mandar datos. */
 export async function probar(url) {
   if (!url) return { ok: false, error: 'Falta la dirección del script' };

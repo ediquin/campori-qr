@@ -7,7 +7,7 @@ escanean las fichas para armar el puntaje y exportarlo a Excel.
 **Sin dependencias, sin compilación, sin servidor.** Son archivos HTML, CSS y
 JavaScript que el navegador abre tal cual. Funciona sin señal.
 
-📖 **[Manual completo → LEEME.md](LEEME.md)**
+📖 **[Manual de uso → LEEME.md](LEEME.md)** · 🔧 **[Decisiones de diseño → ARQUITECTURA.md](ARQUITECTURA.md)**
 
 ---
 

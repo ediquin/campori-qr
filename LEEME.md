@@ -83,8 +83,19 @@ Abrí `evaluador.html` en el celular:
 
 ### Evaluando entre varios
 
-Sí se puede, y es lo normal con 71 clubes. Cada teléfono guarda lo suyo y al final
-se juntan. Tres cosas que conviene respetar:
+Sí se puede, y es lo normal con 71 clubes. Hay **dos formas de juntar los datos** y
+conviene entender la diferencia:
+
+| | Necesita internet | Qué junta |
+|---|---|---|
+| **Google Sheets** | sí | Los puntajes se ven en vivo en una planilla compartida, y cada teléfono puede traer los stickers que usaron los demás |
+| **Exportar / Importar** | no | Unión total en un teléfono: de ahí sale el Excel definitivo con absolutamente todo |
+
+Si van a tener señal, con Sheets alcanza para el día a día — **siempre que cada uno
+use "Traer lo de los demás"**. El Exportar/Importar sigue estando por si la señal
+falla, y es lo que conviene hacer al cerrar todo.
+
+Tres cosas que conviene respetar en cualquier caso:
 
 1. **Repartan los clubes de antemano**, lo más simple es por región. Cada evaluador
    toca solo sus clubes.
@@ -134,11 +145,17 @@ qué y cuándo.
 La dirección y la clave se guardan **en el teléfono**, nunca en el repositorio. Quien
 tenga esa dirección puede escribir en tu planilla, así que no la publiques.
 
-> **La planilla no es sincronización.** Va en un solo sentido: teléfono → planilla.
-> Nunca vuelve nada a los celulares, y los celulares no se enteran de lo que cargó
-> otro. Para juntar los datos de verdad hay que pasar el archivo entre teléfonos
-> (Exportar / Importar), que además es lo único que permite cruzar los stickers entre
-> clubes que evaluaron personas distintas.
+#### Traer lo de los demás — no te lo saltees
+
+El botón **Traer lo de los demás** baja la lista de stickers que ya usaron los otros
+clubes. Es lo que permite detectar un sticker despegado de una ficha y pegado en
+otra cuando esos dos clubes los evaluaron personas distintas.
+
+Sin eso, tu teléfono solo conoce las fichas que vos escaneaste, y esa trampa pasa sin
+que nadie se entere. Se hace solo al abrir la app, pero **si dejás la app abierta
+todo el día, tus datos envejecen**: tocá el botón cada tanto.
+
+En `Ajustes` te dice cuántos stickers tenés y de cuándo son.
 
 ---
 

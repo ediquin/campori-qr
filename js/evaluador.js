@@ -28,6 +28,11 @@ const estado = {
   fichas: new Map(),
   inventario: null,     // Set de ids de sticker impresos, o null si no se cargo
   dispositivo: '',      // quien evalua con este telefono
+  // Que sticker uso cada club segun la planilla compartida. Es lo que permite
+  // detectar un sticker prestado entre clubes que evaluaron personas distintas:
+  // este telefono por si solo nunca lo sabria.
+  remotos: new Map(),   // id de sticker -> id de club, traido de Sheets
+  remotosFecha: null,
   escaner: null,
   linternaEncendida: false,
 };
@@ -54,15 +59,36 @@ function clubesCruzados() {
 
 // ------------------------------------------------------------------ calculo
 
-/** Que stickers ya uso otro club. Es lo que detecta un sticker despegado y reusado. */
+/**
+ * Que stickers ya uso otro club. Es lo que detecta un sticker despegado y reusado.
+ *
+ * Se arma con dos fuentes: lo que hay en este telefono, y lo que trajimos de la
+ * planilla compartida. La segunda es imprescindible cuando cada evaluador tiene sus
+ * propios clubes, porque el sticker robado y el club al que se lo robaron pueden
+ * estar en telefonos distintos.
+ */
 function usadosPorOtros(idClubActual) {
   const mapa = new Map();
+
+  // De la planilla: lo que cargaron los demas telefonos. Se saltean las entradas
+  // del club que estamos evaluando, que son las que mandamos nosotros mismos en
+  // un envio anterior: no son un conflicto, somos nosotros.
+  for (const [idSticker, idClub] of estado.remotos) {
+    if (idClub !== idClubActual) mapa.set(idSticker, idClub);
+  }
+
+  // De este telefono. Pisa a lo remoto porque es mas fresco.
   for (const e of estado.todos) {
     if (e.idClub === idClubActual) continue;
     const l = leerQr(e.crudo);
     if (l.ok && l.clase === 'sticker') mapa.set(l.id, e.idClub);
   }
   return mapa;
+}
+
+function idDeSticker(crudo) {
+  const l = leerQr(crudo);
+  return l.ok && l.clase === 'sticker' ? l.id : null;
 }
 
 function resultadoDe(idClub, escaneos) {
@@ -503,6 +529,64 @@ async function enviarASheets() {
   }
 }
 
+/**
+ * Baja de la planilla lo que ya cargaron los demas telefonos.
+ * @param {boolean} silencioso  true cuando corre solo al abrir la app
+ */
+async function traerDeSheets(silencioso = false) {
+  const url = $('#sheets-url').value.trim() || await almacen.leerAjuste('sheetsUrl', '');
+  const clave = $('#sheets-clave').value || await almacen.leerAjuste('sheetsClave', '');
+  if (!url) {
+    if (!silencioso) mostrarEstadoSheets('aviso', 'Primero pegá la dirección del script.');
+    return;
+  }
+
+  const boton = $('#sheets-traer');
+  if (!silencioso) { boton.disabled = true; mostrarEstadoSheets('', 'Consultando la planilla…'); }
+
+  const r = await sheets.traerSeriales(url, clave);
+  if (!silencioso) boton.disabled = false;
+
+  if (!r.ok) {
+    if (!silencioso) mostrarEstadoSheets('alerta', r.error || 'No se pudo consultar.');
+    return;
+  }
+
+  // Las claves vienen como el texto del QR; lo pasamos al id de sticker (evento-serial),
+  // que es con lo que trabaja el motor de puntaje.
+  estado.remotos = new Map();
+  for (const [crudo, idClub] of Object.entries(r.seriales || {})) {
+    const id = idDeSticker(crudo);
+    if (id) estado.remotos.set(id, idClub);
+  }
+  estado.remotosFecha = Date.now();
+  await almacen.guardarAjuste('remotos', [...estado.remotos]);
+  await almacen.guardarAjuste('remotosFecha', estado.remotosFecha);
+
+  pintarEstadoRemotos();
+  pintarClubes();
+  if (estado.club) pintarFicha();
+  if (!silencioso) {
+    mostrarEstadoSheets('ok', `Listo: ${estado.remotos.size} stickers ya usados, de ${r.clubes} clubes. ` +
+      'Ahora este teléfono puede detectar un sticker que otro club ya usó.');
+  }
+}
+
+function pintarEstadoRemotos() {
+  const caja = $('#estado-remotos');
+  if (!caja) return;
+  if (!estado.remotos.size) {
+    caja.className = 'aviso-caja';
+    caja.innerHTML = '<strong>Todavía no trajiste lo de los demás.</strong> Hasta que lo hagas, ' +
+      'este teléfono no puede detectar un sticker que ya usó un club evaluado por otra persona.';
+    return;
+  }
+  const cuando = new Date(estado.remotosFecha).toLocaleString('es-BO');
+  caja.className = 'aviso-caja ok';
+  caja.innerHTML = `<strong>${estado.remotos.size} stickers</strong> ya usados por otros clubes, ` +
+    `traídos el ${escapar(cuando)}. Volvé a traerlos cada tanto para tenerlos al día.`;
+}
+
 async function probarSheets() {
   const boton = $('#sheets-probar');
   boton.disabled = true;
@@ -553,6 +637,10 @@ async function pintarDiagnostico() {
     [estado.inventario ? '✅' : '⚠️', 'Inventario de stickers',
       estado.inventario ? `${estado.inventario.size} seriales` : 'No cargado'],
     ['📋', 'Clubes en el padrón', String(CLUBES.length)],
+    [estado.remotos.size ? '✅' : '⚠️', 'Stickers usados por otros clubes',
+      estado.remotos.size
+        ? `${estado.remotos.size}, traídos el ${new Date(estado.remotosFecha).toLocaleString('es-BO')}`
+        : 'Sin traer. No se detectan stickers prestados entre clubes de otros evaluadores.'],
     ['🔢', 'Escaneos guardados', String(estado.todos.length)],
     ['🏁', 'Fichas terminadas', String(todos.filter(t => t.ficha?.cerrada).length)],
     ['🔑', 'Prefijo de los QR', CAMPORI.prefijo],
@@ -576,6 +664,10 @@ async function iniciar() {
   $('#sheets-url').value = await almacen.leerAjuste('sheetsUrl', '') || '';
   $('#sheets-clave').value = await almacen.leerAjuste('sheetsClave', '') || '';
 
+  const remotos = await almacen.leerAjuste('remotos', null);
+  if (Array.isArray(remotos)) estado.remotos = new Map(remotos);
+  estado.remotosFecha = await almacen.leerAjuste('remotosFecha', null);
+
   $('#filtro-region').innerHTML = '<option value="">Todas las regiones</option>' +
     [...new Set(CLUBES.map(c => c.region))].map(r => `<option>${escapar(r)}</option>`).join('');
 
@@ -583,13 +675,20 @@ async function iniciar() {
   $('#m-espirituales .valor').textContent = `0/${REGLAS.espiritualesObligatorios}`;
 
   pintarEstadoInventario();
+  pintarEstadoRemotos();
   pintarCruces();
   pintarClubes();
 
-  if (!estado.dispositivo) {
+  if (estado.dispositivo) {
+    $('#estado-cabecera').textContent = `Evaluando como: ${estado.dispositivo}`;
+  } else {
     $('#estado-cabecera').textContent =
       'Ponele nombre a este teléfono en Ajustes, sobre todo si evalúan entre varios.';
   }
+
+  // Si hay planilla configurada y señal, traemos lo de los demas sin molestar.
+  // Que falle no importa: se reintenta a mano desde Ajustes.
+  if ($('#sheets-url').value && navigator.onLine) traerDeSheets(true);
 
   if (!window.isSecureContext) {
     $('#estado-cabecera').textContent =
@@ -734,6 +833,7 @@ $('#guardar-dispositivo').addEventListener('click', async () => {
 $('#sheets-guardar').addEventListener('click', guardarSheets);
 $('#sheets-probar').addEventListener('click', probarSheets);
 $('#sheets-enviar').addEventListener('click', enviarASheets);
+$('#sheets-traer').addEventListener('click', () => traerDeSheets(false));
 
 $('#borrar-todo').addEventListener('click', async () => {
   if (!confirm('¿Borrar TODOS los datos de TODOS los clubes de este teléfono?')) return;

@@ -329,12 +329,22 @@
         Incluir también el detalle de escaneos y las alertas
       </label>
 
-      <div class="fila">
-        <div><button class="principal" id="sheets-enviar">Enviar puntajes ahora</button></div>
+      <div class="fila" style="margin-bottom:14px">
+        <div><button class="principal" id="sheets-enviar">Enviar mis puntajes</button></div>
+        <div><button class="principal" id="sheets-traer">Traer lo de los demás</button></div>
         <div><button id="sheets-probar">Probar conexión</button></div>
         <div><button id="sheets-guardar">Guardar dirección</button></div>
       </div>
       <div id="sheets-estado"></div>
+
+      <h3>Stickers ya usados por otros clubes</h3>
+      <p class="chico tenue" style="margin-top:-6px">
+        Este teléfono solo conoce las fichas que vos escaneaste. Si un club le prestó
+        un sticker a otro y esos dos clubes los evaluaron personas distintas, la trampa
+        pasa desapercibida — salvo que traigas lo que cargaron los demás. Se trae solo
+        al abrir la app, y podés forzarlo con el botón de arriba.
+      </p>
+      <div id="estado-remotos" class="aviso-caja" style="margin-bottom:0"></div>
     </div>
 
     <div class="panel">
