@@ -37,7 +37,7 @@ eventos repetidos, stickers fotocopiados y stickers prestados entre clubes.
 
 ```bash
 node herramientas/servidor.mjs      # http://localhost:8080
-node herramientas/pruebas.mjs       # 405 comprobaciones
+node herramientas/pruebas.mjs       # 406 comprobaciones
 node herramientas/generar-clubes.mjs  # regenera el padrón desde el Excel
 ```
 

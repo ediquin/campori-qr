@@ -13,14 +13,16 @@
 // autoriza realmente a leer y escribir en la planilla.
 
 export const URL_PREDETERMINADA =
-  'https://script.google.com/macros/s/AKfycby2PyREewpwwiTkPXoceYlAUsH2pzDYbMMtZ3c6EVP0Oc_eE-7-otfUdoeSlgGLVCb0/exec';
-const URL_PREDETERMINADA_ANTERIOR =
-  'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
+  'https://script.google.com/macros/s/AKfycbyOMhY3Fr-UEjJJVQ66UStBJa4ieeOhBnKfJYFD2hsuud9TvF7w1zu4PYs0o1LWyIuM/exec';
+const URLS_PREDETERMINADAS_ANTERIORES = new Set([
+  'https://script.google.com/macros/s/AKfycby2PyREewpwwiTkPXoceYlAUsH2pzDYbMMtZ3c6EVP0Oc_eE-7-otfUdoeSlgGLVCb0/exec',
+  'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec',
+]);
 
-/** Actualiza solamente el endpoint oficial anterior; respeta URLs personalizadas. */
+/** Actualiza solamente endpoints oficiales anteriores; respeta URLs personalizadas. */
 export function migrarUrlPredeterminada(url = '') {
   const actual = String(url || '').trim();
-  return !actual || actual === URL_PREDETERMINADA_ANTERIOR
+  return !actual || URLS_PREDETERMINADAS_ANTERIORES.has(actual)
     ? URL_PREDETERMINADA
     : actual;
 }

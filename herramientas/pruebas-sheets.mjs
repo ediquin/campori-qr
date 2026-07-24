@@ -186,12 +186,15 @@ grupo('Sincronizacion bidireccional');
 }
 
 {
-  const anterior = 'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
+  const anteriorReciente = 'https://script.google.com/macros/s/AKfycby2PyREewpwwiTkPXoceYlAUsH2pzDYbMMtZ3c6EVP0Oc_eE-7-otfUdoeSlgGLVCb0/exec';
+  const anteriorInicial = 'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
   const personalizada = 'https://script.google.com/macros/s/personalizada/exec';
   comprobar('los telefonos nuevos reciben la URL vigente',
     migrarUrlPredeterminada(''), URL_PREDETERMINADA);
-  comprobar('la implementacion oficial anterior se migra',
-    migrarUrlPredeterminada(anterior), URL_PREDETERMINADA);
+  comprobar('la implementacion oficial reciente se migra',
+    migrarUrlPredeterminada(anteriorReciente), URL_PREDETERMINADA);
+  comprobar('la primera implementacion oficial tambien se migra',
+    migrarUrlPredeterminada(anteriorInicial), URL_PREDETERMINADA);
   comprobar('una URL personalizada se conserva',
     migrarUrlPredeterminada(personalizada), personalizada);
 }
