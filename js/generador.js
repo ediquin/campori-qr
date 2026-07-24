@@ -7,7 +7,10 @@ import {
 import { armarSticker } from './codigo.js';
 import { generarMatriz, matrizASvg } from './qr-encoder.js?v=2';
 import { crearIdentificador } from './identificador.js';
-import { crearPdfStickers } from './pdf-stickers.js';
+import {
+  LADO_QR_MM, obtenerFormatoPapel,
+  planificarPaginas, resumirPagina, crearPdfStickers,
+} from './pdf-stickers.js?v=3';
 import { descargar } from './exportar.js';
 
 const $ = sel => document.querySelector(sel);
@@ -15,11 +18,8 @@ const $$ = sel => [...document.querySelectorAll(sel)];
 const escapar = s => String(s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// Hoja oficio 215 x 330 mm, con 5 mm de margen: 12 columnas x 17 filas.
-const COLUMNAS_POR_HOJA = 12;
-const FILAS_POR_HOJA = 17;
-const STICKERS_POR_HOJA = COLUMNAS_POR_HOJA * FILAS_POR_HOJA;
-const LADO_QR_STICKER = 15;
+// El QR conserva 15 mm tanto en oficio como en carta.
+const LADO_QR_STICKER = LADO_QR_MM;
 const CLAVE_SERIALES = `campori-qr-unicos-${CAMPORI.prefijo}`;
 let ultimaGeneracion = null;
 
@@ -75,14 +75,29 @@ function eventosElegidos() {
   return $$('input[name=evento]:checked').map(c => c.value);
 }
 
+function formatoElegido() {
+  return obtenerFormatoPapel($('#formato-papel').value);
+}
+
+function aplicarFormatoPapel(formato) {
+  document.documentElement.style.setProperty('--ancho-hoja-vista', `${formato.anchoMm - 10}mm`);
+  document.documentElement.style.setProperty('--alto-hoja-vista', `${formato.altoMm - 10}mm`);
+  $('#estilo-papel-impresion').textContent =
+    `@media print { @page { size: ${formato.anchoMm}mm ${formato.altoMm}mm; margin: 5mm; } }`;
+  $('#detalle-papel').textContent =
+    `PDF ${formato.nombre}: ${(formato.anchoMm / 10).toLocaleString('es-BO')} × ` +
+    `${(formato.altoMm / 10).toLocaleString('es-BO')} cm · hasta ${formato.capacidad} QR de 1,5 cm.`;
+}
+
 function actualizarConteo() {
   const cantidad = Number($('#cantidad').value) || 0;
   const eventos = eventosElegidos();
   const total = eventos.length * cantidad;
-  // Cada evento empieza en una hoja nueva para que los tacos no se mezclen.
-  const hojas = eventos.length * Math.ceil(cantidad / STICKERS_POR_HOJA);
+  const formato = formatoElegido();
+  const hojas = Math.ceil(total / formato.capacidad);
   $('#conteo-stickers').textContent =
-    `${eventos.length} eventos × ${cantidad} = ${total} stickers · ${hojas} hoja${hojas === 1 ? '' : 's'} oficio`;
+    `${eventos.length} eventos × ${cantidad} = ${total} stickers · ` +
+    `${hojas} hoja${hojas === 1 ? '' : 's'} ${formato.nombre.toLowerCase()}`;
 
   const pesado = total > 900;
   $('#aviso-volumen').style.display = pesado ? '' : 'none';
@@ -142,6 +157,7 @@ async function generarStickers() {
   const barra = $('#progreso');
   barra.style.display = 'block';
   $('#generar-stickers').disabled = true;
+  $('#formato-papel').disabled = true;
   $('#descargar-pdf').disabled = true;
   $('#imprimir').disabled = true;
   $('#limpiar').disabled = true;
@@ -166,32 +182,40 @@ async function generarStickers() {
   } finally {
     barra.style.display = 'none';
     $('#generar-stickers').disabled = false;
+    $('#formato-papel').disabled = false;
   }
 
-  const hojas = [];
-  let indice = 0;
-  for (const codigo of codigos) {
-    const evento = buscarEvento(codigo);
-    const delEvento = piezas.slice(indice, indice + cantidad);
-    indice += cantidad;
-    for (let i = 0; i < delEvento.length; i += STICKERS_POR_HOJA) {
-      const tanda = delEvento.slice(i, i + STICKERS_POR_HOJA);
-      const pagina = Math.floor(i / STICKERS_POR_HOJA) + 1;
-      const paginas = Math.ceil(delEvento.length / STICKERS_POR_HOJA);
-      hojas.push(`<section class="hoja">
-        <div class="hoja-titulo">
-          <span>${evento.codigo} — ${escapar(evento.nombre)} · ${evento.tipo === 'adicional' ? evento.puntos : PUNTOS_EVENTO} pts</span>
-          <span class="derecha">${escapar(CAMPORI.nombre)} · hoja ${pagina}/${paginas} · ${tanda.length} stickers</span>
-        </div>
-        <div class="rejilla-stickers">${tanda.join('')}</div>
-      </section>`);
-    }
-  }
+  let indicePieza = 0;
+  gruposPdf.forEach(grupo => {
+    grupo.stickers.forEach(sticker => {
+      sticker.html = piezas[indicePieza++];
+    });
+  });
 
-  ultimaGeneracion = { campori: CAMPORI.nombre, grupos: gruposPdf };
+  ultimaGeneracion = {
+    campori: CAMPORI.nombre,
+    formatoPapel: formatoElegido().id,
+    grupos: gruposPdf,
+  };
+  mostrarGeneracion(ultimaGeneracion);
+}
+
+function mostrarGeneracion(generacion) {
+  const formato = obtenerFormatoPapel(generacion.formatoPapel);
+  aplicarFormatoPapel(formato);
+  const paginas = planificarPaginas(generacion.grupos, formato.id);
+  const hojas = paginas.map(pagina => `<section class="hoja">
+    <div class="hoja-titulo">
+      <span class="eventos-pagina" title="${escapar(resumirPagina(pagina, 1000))}">${escapar(resumirPagina(pagina))}</span>
+      <span class="derecha">${escapar(generacion.campori)} · ${formato.nombre} · hoja ${pagina.numeroPagina}/${pagina.paginasTotal} · ${pagina.stickers.length} stickers</span>
+    </div>
+    <div class="rejilla-stickers">${pagina.stickers.map(sticker => sticker.html).join('')}</div>
+  </section>`);
+
+  const total = generacion.grupos.reduce((n, grupo) => n + grupo.stickers.length, 0);
   const descripcion =
-    `${aImprimir.length} QR ${aImprimir.length === 1 ? 'único' : 'únicos'} en ` +
-    `${hojas.length} hoja${hojas.length === 1 ? '' : 's'}`;
+    `${total} QR ${total === 1 ? 'único' : 'únicos'} en ` +
+    `${hojas.length} hoja${hojas.length === 1 ? '' : 's'} ${formato.nombre.toLowerCase()}`;
   mostrar(hojas.join(''), descripcion);
 }
 
@@ -213,6 +237,7 @@ async function descargarPdf() {
   const boton = $('#descargar-pdf');
   boton.disabled = true;
   $('#generar-stickers').disabled = true;
+  $('#formato-papel').disabled = true;
   $('#imprimir').disabled = true;
   $('#limpiar').disabled = true;
   $('#estado-salida').textContent = 'Creando PDF vectorial…';
@@ -223,9 +248,10 @@ async function descargarPdf() {
           `Creando PDF… ${hechos}/${total} QR · hoja ${pagina}/${paginas}`;
       },
     });
-    descargar(pdf, `stickers-campori-${hoy()}.pdf`);
+    const formato = obtenerFormatoPapel(generacion.formatoPapel);
+    descargar(pdf, `stickers-campori-${formato.id}-${hoy()}.pdf`);
     const total = generacion.grupos.reduce((n, grupo) => n + grupo.stickers.length, 0);
-    $('#estado-salida').textContent = `PDF descargado · ${total} QR`;
+    $('#estado-salida').textContent = `PDF ${formato.nombre} descargado · ${total} QR`;
   } catch (error) {
     console.error(error);
     $('#estado-salida').textContent = 'No se pudo crear el PDF';
@@ -233,6 +259,7 @@ async function descargarPdf() {
   } finally {
     const disponible = Boolean(ultimaGeneracion);
     $('#generar-stickers').disabled = false;
+    $('#formato-papel').disabled = false;
     boton.disabled = !disponible;
     $('#imprimir').disabled = !disponible;
     $('#limpiar').disabled = !disponible;
@@ -240,9 +267,19 @@ async function descargarPdf() {
 }
 
 pintarSelectorEventos();
+aplicarFormatoPapel(formatoElegido());
 actualizarConteo();
 
 $('#cantidad').addEventListener('input', actualizarConteo);
+$('#formato-papel').addEventListener('change', () => {
+  const formato = formatoElegido();
+  aplicarFormatoPapel(formato);
+  actualizarConteo();
+  if (ultimaGeneracion) {
+    ultimaGeneracion.formatoPapel = formato.id;
+    mostrarGeneracion(ultimaGeneracion);
+  }
+});
 $('#generar-stickers').addEventListener('click', generarStickers);
 $('#descargar-pdf').addEventListener('click', descargarPdf);
 $('#imprimir').addEventListener('click', () => window.print());

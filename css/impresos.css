@@ -2,18 +2,30 @@
    Todas las medidas van en milimetros porque el resultado es fisico: un sticker
    de 15 mm tiene que medir 15 mm en el papel. */
 
-/* Compacta a proposito: deja espacio para 17 filas en una hoja oficio de
-   215 x 330 mm con margenes de 5 mm. */
+/* Compacta a proposito: deja espacio para 17 filas en oficio y 14 en carta,
+   siempre con margenes de 5 mm. */
 .hoja-titulo {
   font: 600 8.5pt/1.2 system-ui, sans-serif;
   padding: 1mm 2mm 1.5mm;
   border-bottom: .3mm solid #000;
   margin-bottom: 2mm;
-  display: flex;
-  justify-content: space-between;
-  gap: 4mm;
+  display: block;
 }
-.hoja-titulo .derecha { font-weight: 400; color: #444; }
+.hoja-titulo .eventos-pagina {
+  display: block;
+  font-size: 7pt;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hoja-titulo .derecha {
+  display: block;
+  font-weight: 400;
+  font-size: 7pt;
+  color: #444;
+  text-align: right;
+  margin-top: .5mm;
+}
 
 /* ---------------------------------------------------------------- stickers */
 

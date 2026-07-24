@@ -42,12 +42,13 @@
     background: #6ea8ff1a; border: 1px solid #6ea8ff44; font-size: .85rem;
   }
 
-  /* Vista previa y exportación en papel oficio: 215 x 330 mm. */
-  .hoja { width: 205mm; min-height: 320mm; }
-  @media print {
-    @page { size: 215mm 330mm; margin: 5mm; }
+  /* La vista previa cambia entre oficio y carta desde el selector. */
+  .hoja {
+    width: var(--ancho-hoja-vista, 205mm);
+    min-height: var(--alto-hoja-vista, 320mm);
   }
 </style>
+<style id="estilo-papel-impresion"></style>
 </head>
 <body>
 
@@ -60,7 +61,7 @@
   <div id="barra-impresion" class="no-imprimir">
     <div class="estado-descarga">
       <strong id="estado-salida">Primero generá las hojas de stickers</strong>
-      <span class="chico tenue">El PDF será oficio (21,5 × 33 cm) y conservará cada QR en 1,5 cm.</span>
+      <span class="chico tenue" id="detalle-papel">El PDF conservará cada QR en 1,5 cm.</span>
     </div>
     <button class="principal" id="descargar-pdf" disabled>Descargar PDF</button>
     <button id="imprimir" disabled>Imprimir</button>
@@ -72,8 +73,10 @@
     <section class="panel">
       <h2>QR de eventos</h2>
       <p class="chico tenue" style="margin-top:-6px">
-        Cada hoja oficio trae hasta 204 QR de 15 mm de un mismo evento, listos para recortar y
-        entregarle al juez de esa estación. Cada vez que generás, todos reciben un
+        Podés elegir hoja oficio o carta. Los eventos se acomodan uno
+        después de otro para aprovechar toda la hoja y la cabecera identifica cuáles
+        contiene, incluso cuando uno continúa en la hoja siguiente. Cada vez que
+        generás, todos reciben un
         identificador aleatorio nuevo y único. No usa inventarios ni fichas.
       </p>
 
@@ -81,6 +84,13 @@
         <div class="angosto">
           <label for="cantidad">Stickers por evento</label>
           <input type="number" id="cantidad" value="80" min="1" max="2000">
+        </div>
+        <div style="flex:0 1 290px">
+          <label for="formato-papel">Tamaño de hoja</label>
+          <select id="formato-papel">
+            <option value="oficio">Oficio · 21,5 × 33 cm · 204 QR</option>
+            <option value="carta">Carta · 21,6 × 28,15 cm · 168 QR</option>
+          </select>
         </div>
         <div style="flex:2 1 300px">
           <label>&nbsp;</label>
@@ -104,6 +114,6 @@
   <div id="salida"></div>
 </main>
 
-<script type="module" src="js/generador.js?v=6"></script>
+<script type="module" src="js/generador.js?v=8"></script>
 </body>
 </html>

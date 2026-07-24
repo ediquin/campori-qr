@@ -52,14 +52,18 @@ Todos valen 100 puntos y cada uno puede sumar una sola vez por club.
 Abrí `generador.html`:
 
 Elegí los eventos y cuántos QR necesitás por evento (80 alcanza: son 71 clubes).
-Cada hoja oficio (21,5 × 33 cm) trae hasta 204 QR de 15 mm de un mismo evento,
-listos para recortar y darle al juez de esa estación. La página no genera fichas ni pide inventarios.
+Después elegí el tamaño de papel: **Oficio (21,5 × 33 cm)** admite 204 QR y
+**Carta (21,6 × 28,15 cm)** admite 168 QR. En ambos casos cada QR conserva 15 mm.
+Los eventos se acomodan de forma continua para aprovechar el espacio restante; la
+cabecera muestra los nombres y rangos presentes y repite el evento cuando continúa.
+Quedan listos para recortar y darle al juez de esa estación. La página no genera
+fichas ni pide inventarios.
 Cada nueva generación crea identificadores aleatorios distintos.
 
-Después de generar, tocá **Descargar PDF**. El archivo ya sale en hoja oficio de
-21,5 × 33 cm, con cada QR vectorial de 15 mm. También podés usar **Imprimir**;
-en ese caso hacelo **al 100%, sin "ajustar a página"**, o los 15 mm dejan de ser
-15 mm.
+Después de generar, tocá **Descargar PDF**. El archivo sale con el tamaño elegido
+y cada QR vectorial de 15 mm. También podés usar **Imprimir**; en ese caso elegí
+en la impresora la misma medida y hacelo **al 100%, sin "ajustar a página"**, o
+los 15 mm dejan de ser 15 mm.
 
 ### 3. Durante el campamento
 
@@ -270,8 +274,8 @@ redundancia disponible y conserva el patrón de alineación para leerlo inclinad
   hasta 11 bytes rotos y que **nunca inventa datos** cuando el daño la supera.
 - **Exportación** — el `.xlsx` se vuelve a abrir y se comprueba que los CRC del zip
   y los datos (acentos, comillas, números, celdas vacías) estén intactos.
-- **PDF de stickers** — comprueba hoja oficio de 215 × 330 mm, paginación de
-  204 QR, dibujo vectorial, estructura `xref` y longitudes de cada flujo.
+- **PDF de stickers** — comprueba oficio de 215 × 330 mm con 204 QR, carta de
+  216 × 281,5 mm con 168 QR, dibujo vectorial, estructura `xref` y longitudes.
 - **Google Sheets** — verifica que varios evaluadores puedan actualizar clubes
   distintos sin pisarse y que los seriales con más de un club se conserven completos.
 - **Escenario completo** — una ficha realista del club de prueba `ediquin`, con sus
