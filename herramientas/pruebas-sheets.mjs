@@ -255,11 +255,14 @@ function aplicarParches(matriz, cambios) {
 }
 
 {
+  const anteriorV2 = 'https://script.google.com/macros/s/AKfycbyOMhY3Fr-UEjJJVQ66UStBJa4ieeOhBnKfJYFD2hsuud9TvF7w1zu4PYs0o1LWyIuM/exec';
   const anteriorReciente = 'https://script.google.com/macros/s/AKfycby2PyREewpwwiTkPXoceYlAUsH2pzDYbMMtZ3c6EVP0Oc_eE-7-otfUdoeSlgGLVCb0/exec';
   const anteriorInicial = 'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
   const personalizada = 'https://script.google.com/macros/s/personalizada/exec';
   comprobar('los telefonos nuevos reciben la URL vigente',
     migrarUrlPredeterminada(''), URL_PREDETERMINADA);
+  comprobar('la primera implementación v2 se migra',
+    migrarUrlPredeterminada(anteriorV2), URL_PREDETERMINADA);
   comprobar('la implementacion oficial reciente se migra',
     migrarUrlPredeterminada(anteriorReciente), URL_PREDETERMINADA);
   comprobar('la primera implementacion oficial tambien se migra',

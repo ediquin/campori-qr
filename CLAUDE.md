@@ -283,7 +283,7 @@ Versiones de caché actuales:
 
 - `generador.html` carga `js/generador.js?v=8`.
 - `js/generador.js` carga `js/pdf-stickers.js?v=3`.
-- Service worker: `campori-qr-v25`.
+- Service worker: `campori-qr-v32`.
 
 Si se cambian archivos servidos offline, incrementar nuevamente la versión del
 service worker y agregar las nuevas URLs con query string a `ARCHIVOS`.
@@ -354,7 +354,7 @@ Archivos relevantes para continuarlo:
 URL predeterminada actual del Apps Script:
 
 ```text
-https://script.google.com/macros/s/AKfycbyOMhY3Fr-UEjJJVQ66UStBJa4ieeOhBnKfJYFD2hsuud9TvF7w1zu4PYs0o1LWyIuM/exec
+https://script.google.com/macros/s/AKfycbzNc5k6vQBXXjlnaWsu7Mjdu9QlW7z3oDsXLZUUA3cccYXjbAL_ZIZs17MDm5KBkWEA/exec
 ```
 
 ## Reglas para cambios futuros

@@ -10,7 +10,7 @@ import { leerQr } from './codigo.js';
 import { calcular, ESTADOS } from './puntaje.js';
 import { Escaner, VERSION_LECTOR, pitido, vibrar, activarSonido } from './escaner.js?v=5';
 import { aXlsx, aCsv, descargar } from './exportar.js';
-import * as sheets from './sheets.js?v=3';
+import * as sheets from './sheets.js?v=4';
 import * as almacen from './almacen.js';
 
 const $ = s => document.querySelector(s);
