@@ -24,13 +24,18 @@ Reglas del puntaje:
 | Físicos | 14 disponibles | 200 | Cuentan los **8 primeros escaneados** | 1600 |
 | Espirituales | 7 | 200 | Los 7 son obligatorios | 1400 |
 | **Base** | | | | **3000** |
-| Adicional | 33 eventos | 100 / 200 / 500 | Cada evento cuenta una vez, fuera del tope base | — |
+| Adicional | 35 eventos | 100 / 200 / 250 / 450 / 500 | Cada evento cuenta una vez, fuera del tope base | — |
 | Sanciones | 3 | −2000 / −500 | Restan del total; se pueden repetir (varios días) | — |
 
 Los eventos físicos y espirituales valen 200. Los adicionales valen lo que dice el
-catálogo: los 29 originales valen 100, y los cuatro agregados después valen 500
-(Botiquín) y 200 (Plaza del Aventurero, Seguridad, Limpieza Km4). Ningún evento se
-repite, salvo las sanciones.
+catálogo. Ningún evento se repite, salvo las sanciones.
+
+**Botiquín es una rúbrica de tres niveles** (`A30` Personal 500, `A34` Proactividad
+450, `A35` Solo 250), unidos por `rubrica: 'botiquin'`. El club recibe **uno solo**.
+Si por error termina con más de uno, el motor cuenta el de mayor puntaje, marca los
+otros como `desplazado` (no suman) y **agrega una alerta grave** para que el equipo
+revise el cruce. Es el único caso donde varios códigos distintos se excluyen entre sí;
+extender esto a otra rúbrica es solo agregar el campo `rubrica` a los eventos del grupo.
 
 **Sanciones** (`S01`–`S03`): restan puntaje. Una misma sanción puede aplicarse varias
 veces (distintos stickers, p. ej. la misma falta en dos días), pero el **mismo sticker
@@ -247,6 +252,7 @@ Cada escaneo termina en exactamente uno de estos estados:
 | `serial_ajeno` | alerta | no — ya lo usó otro club |
 | `desconocido` | alerta | no — código fuera del catálogo |
 | `invalido` | alerta | no — firma mala o formato ilegible |
+| `desplazado` | alerta | no — nivel de rúbrica tapado por otro de mayor puntaje |
 
 Las **sanciones** entran como `contado` (se registraron bien) pero con puntos
 negativos, así que el motor no necesita un estado aparte. La UI las muestra distinto:

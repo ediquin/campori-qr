@@ -20,7 +20,7 @@ const signo = n => n > 0 ? `+${n}` : n < 0 ? `${n}` : '—';
 const ICONOS = {
   contado: '✅', club: '🏷️', repetido: '🔁', excedente: '🔢',
   serial_repetido: '🔁', serial_ajeno: '🚨',
-  desconocido: '❓', invalido: '❌',
+  desconocido: '❓', invalido: '❌', desplazado: '⚖️',
 };
 
 const estado = {

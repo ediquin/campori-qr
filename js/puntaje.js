@@ -21,6 +21,9 @@ export const ESTADOS = {
   serial_ajeno: { etiqueta: 'Sticker de otro club', nivel: 'alerta' },
   desconocido: { etiqueta: 'Evento fuera del catálogo', nivel: 'alerta' },
   invalido: { etiqueta: 'QR inválido', nivel: 'alerta' },
+  // Un nivel de una rubrica (p. ej. Botiquin) que quedo desplazado por otro de mayor
+  // puntaje del mismo grupo. No suma, y se marca como error para revisar el cruce.
+  desplazado: { etiqueta: 'Nivel desplazado (rúbrica)', nivel: 'alerta' },
 };
 
 /**
@@ -119,6 +122,40 @@ export function calcular(escaneos, opciones = {}) {
     contados[evento.tipo].push({ evento, puntos: puntosCatalogo, orden: i + 1 });
     anotar('contado', { evento, puntos: puntosCatalogo });
   });
+
+  // ------------------------------------------------------------ rubricas
+  // Algunos eventos son niveles de una misma rubrica (p. ej. los tres de Botiquin):
+  // el club recibe UNO solo. Si aparecen varios, cuenta el de mayor puntaje y los
+  // demas quedan desplazados. Es un error operativo (el juez pego dos niveles), asi
+  // que se marca como alerta grave para que el equipo lo revise y lo aclare.
+  const porRubrica = new Map();
+  for (const c of contados.adicional) {
+    if (!c.evento.rubrica) continue;
+    if (!porRubrica.has(c.evento.rubrica)) porRubrica.set(c.evento.rubrica, []);
+    porRubrica.get(c.evento.rubrica).push(c);
+  }
+  for (const items of porRubrica.values()) {
+    if (items.length < 2) continue;
+    // Gana el de mayor puntaje; si empatan, el que se escaneo primero.
+    items.sort((a, b) => b.puntos - a.puntos || a.orden - b.orden);
+    const [ganador, ...perdedores] = items;
+    const perdedoresSet = new Set(perdedores);
+    contados.adicional = contados.adicional.filter(c => !perdedoresSet.has(c));
+    for (const p of perdedores) {
+      const d = detalle.find(x => x.orden === p.orden);
+      if (d) {
+        d.estado = 'desplazado';
+        d.puntos = 0;
+        d.detalleTexto = `No suma: ya cuenta "${ganador.evento.nombre}" (${ganador.puntos} pts) del mismo grupo`;
+      }
+    }
+    const nombres = perdedores.map(p => `"${p.evento.nombre}"`).join(', ');
+    alertas.push({
+      nivel: 'alerta',
+      texto: `REVISAR — el club tiene ${items.length} niveles de la misma rúbrica pegados. ` +
+             `Cuenta solo "${ganador.evento.nombre}" (${ganador.puntos} pts); se ignoró ${nombres}. Aclarar el cruce.`,
+    });
+  }
 
   const sumar = lista => lista.reduce((t, x) => t + x.puntos, 0);
   const puntosFisico = sumar(contados.fisico);

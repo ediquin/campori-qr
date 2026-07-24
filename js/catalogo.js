@@ -90,7 +90,16 @@ export const CRITERIOS_ADICIONALES = [
   { codigo: 'A29', nombre: 'VOLEYBALL GIGANTE', puntos: 100 },
   // Eventos agregados despues. Van al final para no renumerar los anteriores, y
   // pueden tener puntajes distintos de 100: el motor lee el valor de cada uno.
-  { codigo: 'A30', nombre: 'BOTIQUÍN', puntos: 500 },
+  //
+  // Botiquin es una RUBRICA de tres niveles: el club recibe UNO solo, segun su
+  // desempeño. Los tres comparten `rubrica: 'botiquin'`. Si por un error un club
+  // terminara con mas de uno, el motor cuenta solo el de mayor puntaje y avisa del
+  // cruce como alerta grave para que se revise (ver js/puntaje.js).
+  // Nota: A34 y A35 son codigos nuevos; van pegados a A30 en la lista solo para que
+  // el generador los muestre juntos, sin renumerar A31-A33.
+  { codigo: 'A30', nombre: 'Botiquín y Personal', puntos: 500, rubrica: 'botiquin' },
+  { codigo: 'A34', nombre: 'Botiquín y proactividad', puntos: 450, rubrica: 'botiquin' },
+  { codigo: 'A35', nombre: 'Solo Botiquín', puntos: 250, rubrica: 'botiquin' },
   { codigo: 'A31', nombre: 'PLAZA DEL AVENTURERO', puntos: 200 },
   { codigo: 'A32', nombre: 'SEGURIDAD', puntos: 200 },
   { codigo: 'A33', nombre: 'LIMPIEZA KM4', puntos: 200 },

@@ -15,12 +15,16 @@ aplicaciones. Son archivos HTML, CSS y JavaScript que el navegador abre tal cual
 | Físicos | 14 disponibles | 200 | Solo cuentan los **8 primeros escaneados** | **1600** |
 | Espirituales | 7 | 200 | Los 7 son **obligatorios** | **1400** |
 | **Puntaje base** | | | | **3000** |
-| Adicional | 33 eventos | 100 / 200 / 500 | Cada evento cuenta una vez y suma **aparte** del puntaje base | — |
+| Adicional | 35 eventos | 100 a 500 | Cada evento cuenta una vez y suma **aparte** del puntaje base | — |
 | Sanciones | 3 | −2000 / −500 | Restan del total; se pueden repetir (varios días) | — |
 
-No hay rúbrica ni puestos: los físicos y espirituales suman 200; los adicionales
-suman lo que dice el catálogo (los 29 originales 100, y Botiquín 500, Plaza del
-Aventurero / Seguridad / Limpieza Km4 200).
+Los físicos y espirituales suman 200; los adicionales suman lo que dice el catálogo
+(los 29 originales 100; Plaza / Seguridad / Limpieza Km4 200).
+
+**Botiquín es una rúbrica de tres niveles**: Personal (500), Proactividad (450) y
+Solo Botiquín (250). El club recibe **uno solo**, el que le corresponda. Si por error
+un club termina con dos pegados, la app cuenta solo el más alto y marca el cruce como
+**alerta grave** para que lo revisen y aclaren.
 
 Las **sanciones** restan puntaje. Una misma sanción puede aplicarse varias veces (con
 stickers distintos), pero el mismo sticker no resta dos veces. El **total nunca baja

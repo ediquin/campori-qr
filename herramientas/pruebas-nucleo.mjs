@@ -202,17 +202,52 @@ grupo('Puntaje adicional');
 }
 
 {
-  comprobar('hay 33 eventos adicionales', CRITERIOS_ADICIONALES.length, 33);
+  comprobar('hay 35 eventos adicionales', CRITERIOS_ADICIONALES.length, 35);
   comprobar('los adicionales A01-A29 valen 100 puntos',
     CRITERIOS_ADICIONALES.slice(0, 29).every(evento => evento.puntos === 100), true);
-  comprobar('los adicionales agregados valen segun el catalogo',
-    CRITERIOS_ADICIONALES.slice(29).map(e => [e.codigo, e.puntos]),
-    [['A30', 500], ['A31', 200], ['A32', 200], ['A33', 200]]);
 
-  // Un evento adicional de 500 lee su puntaje del catalogo, no el fijo de 200.
-  const r = calcular([sticker('A30')]);
-  comprobar('Botiquin (A30) suma 500', r.adicional.puntos, 500);
+  const porCod = Object.fromEntries(CRITERIOS_ADICIONALES.map(e => [e.codigo, e]));
+  comprobar('los tres niveles de Botiquin valen 500/450/250',
+    [porCod.A30.puntos, porCod.A34.puntos, porCod.A35.puntos], [500, 450, 250]);
+  comprobar('los tres niveles comparten la misma rubrica',
+    [porCod.A30.rubrica, porCod.A34.rubrica, porCod.A35.rubrica],
+    ['botiquin', 'botiquin', 'botiquin']);
+  comprobar('Plaza/Seguridad/Limpieza valen 200',
+    [porCod.A31.puntos, porCod.A32.puntos, porCod.A33.puntos], [200, 200, 200]);
+
+  // Un adicional de 500 lee su puntaje del catalogo, no el fijo de 200.
+  comprobar('Botiquin y Personal (A30) suma 500', calcular([sticker('A30')]).adicional.puntos, 500);
   comprobar('Plaza (A31) suma 200', calcular([sticker('A31')]).adicional.puntos, 200);
+}
+
+grupo('Rúbrica de Botiquín: mutuamente excluyente');
+
+{
+  const cod = d => leerQr(d.escaneo.crudo).codigo;
+
+  // Dos niveles del mismo grupo: cuenta solo el mayor, sin importar el orden.
+  const r = calcular([sticker('A35'), sticker('A30')]);   // Solo(250) y luego Personal(500)
+  comprobar('cuenta solo el nivel mas alto', r.adicional.puntos, 500);
+  comprobar('el nivel menor queda desplazado',
+    r.detalle.find(d => cod(d) === 'A35').estado, 'desplazado');
+  comprobar('el desplazado no suma', r.detalle.find(d => cod(d) === 'A35').puntos, 0);
+  comprobar('avisa del cruce como alerta grave',
+    r.alertas.some(a => a.nivel === 'alerta' && a.texto.includes('rúbrica')), true);
+
+  const alReves = calcular([sticker('A30'), sticker('A35')]);
+  comprobar('el mayor gana aunque se escanee primero', alReves.adicional.puntos, 500);
+
+  // Un solo nivel: cuenta normal, sin aviso.
+  const uno = calcular([sticker('A34')]);
+  comprobar('un solo nivel cuenta normal', uno.adicional.puntos, 450);
+  comprobar('con un solo nivel no hay aviso de rubrica',
+    uno.alertas.some(a => a.texto.includes('rúbrica')), false);
+
+  // Los tres niveles: cuenta 500, desplaza dos.
+  const tres = calcular([sticker('A35'), sticker('A34'), sticker('A30')]);
+  comprobar('con los tres niveles cuenta solo 500', tres.adicional.puntos, 500);
+  comprobar('quedan dos niveles desplazados',
+    tres.detalle.filter(d => d.estado === 'desplazado').length, 2);
 }
 
 grupo('Sanciones');
