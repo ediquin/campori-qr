@@ -58,7 +58,8 @@ bloquea. `localhost` también cuenta como seguro, para probar en la computadora.
    imprimir. Es lo que hace que un QR sea nuestro y no de cualquiera.
 El evaluador está en modo de **inventario automático**: no hay que cargar archivos
 en los teléfonos. Todo QR con firma válida y evento conocido puede usarse por primera
-vez con cualquier club.
+vez con cualquier club. El generador recuerda automáticamente los seriales usados en
+ese navegador para que una tanda nueva continúe la numeración.
 
 ## Datos personales
 

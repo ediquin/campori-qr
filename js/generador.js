@@ -15,13 +15,34 @@ const escapar = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&l
 const STICKERS_POR_HOJA = 7 * 9;   // la rejilla es de 7 columnas x 9 filas
 const LADO_QR_STICKER = 24;        // mm; tiene que coincidir con css/impresos.css
 
-// Inventario acumulado de todo lo impreso. Es lo que despues valida la app
-// evaluadora: un QR bien firmado pero cuyo serial no este aca no salio de nosotros.
+// Registro acumulado de los seriales generados. El evaluador no necesita este
+// registro, pero el generador lo conserva automaticamente para no repetir seriales
+// aunque se cierre y se vuelva a abrir la pagina.
+const CLAVE_REGISTRO = `campori-qr-seriales-${CAMPORI.prefijo}`;
 let inventario = {
   campori: CAMPORI.prefijo,
   generado: new Date().toISOString(),
   stickers: [],       // ids con la forma "F03-0147"
 };
+
+function sincronizarRegistroAutomatico() {
+  try {
+    const guardado = JSON.parse(localStorage.getItem(CLAVE_REGISTRO) || 'null');
+    if (guardado?.campori !== CAMPORI.prefijo || !Array.isArray(guardado.stickers)) return;
+    inventario.stickers = [...new Set([...inventario.stickers, ...guardado.stickers])];
+  } catch {
+    // Si el navegador bloquea el almacenamiento, la generacion sigue funcionando.
+  }
+}
+
+function guardarRegistroAutomatico() {
+  inventario.generado = new Date().toISOString();
+  try {
+    localStorage.setItem(CLAVE_REGISTRO, JSON.stringify(inventario));
+  } catch {
+    // El respaldo descargable sigue disponible aunque el almacenamiento este lleno.
+  }
+}
 
 // ------------------------------------------------------------------ interfaz
 
@@ -109,8 +130,7 @@ function actualizarConteo() {
 
 // ------------------------------------------------------------------ seriales
 
-// El serial arranca donde termino la ultima impresion de ese evento, para que
-// nunca se repita entre tandas. Por eso importa conservar el inventario.
+// El serial arranca donde termino la ultima generacion de ese evento.
 function siguienteSerial(codigo) {
   let maximo = 0;
   for (const id of inventario.stickers) {
@@ -145,6 +165,10 @@ async function generarStickers() {
     alert('Elegí al menos un evento y una cantidad mayor a cero.');
     return;
   }
+
+  // Volvemos a leer el registro por si otra pestaña genero una tanda desde que se
+  // abrio esta pagina. No requiere ningun archivo ni accion del usuario.
+  sincronizarRegistroAutomatico();
 
   // Primero armamos la lista completa de lo que hay que imprimir.
   const aImprimir = [];
@@ -193,6 +217,7 @@ async function generarStickers() {
   }
 
   mostrar(hojas.join(''), `${aImprimir.length} stickers en ${hojas.length} hojas`);
+  guardarRegistroAutomatico();
   actualizarResumenInventario();
 }
 
@@ -277,8 +302,8 @@ function mostrar(html, descripcion) {
 function actualizarResumenInventario() {
   const total = inventario.stickers.length;
   $('#resumen-inventario').innerHTML = total === 0
-    ? '<span class="tenue">Todavía no generaste ningún sticker en esta sesión.</span>'
-    : `<strong>${total}</strong> stickers en el inventario.<br>` + resumenPorEvento();
+    ? '<span class="tenue">Todavía no generaste ningún sticker en este navegador.</span>'
+    : `<strong>${total}</strong> seriales recordados automáticamente en este navegador.<br>` + resumenPorEvento();
   $('#bajar-inventario').disabled = total === 0;
 }
 
@@ -320,6 +345,7 @@ function cargarInventario(archivo) {
       const juntos = new Set([...inventario.stickers, ...datos.stickers]);
       const nuevos = juntos.size - inventario.stickers.length;
       inventario.stickers = [...juntos];
+      guardarRegistroAutomatico();
       actualizarResumenInventario();
       alert(`Inventario cargado: ${nuevos} seriales nuevos, ${inventario.stickers.length} en total.\n` +
             `Los stickers que generes ahora siguen la numeración desde donde quedó.`);
@@ -332,6 +358,7 @@ function cargarInventario(archivo) {
 
 // ------------------------------------------------------------------ arranque
 
+sincronizarRegistroAutomatico();
 pintarSelectorEventos();
 pintarSelectorClubes();
 actualizarConteo();

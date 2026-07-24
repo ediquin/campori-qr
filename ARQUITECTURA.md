@@ -175,6 +175,10 @@ acepta cualquier QR con firma válida y evento conocido. No hay que distribuir u
 archivo entre teléfonos. El costo de esa simplificación es que no puede distinguir
 un serial firmado que nunca salió de la impresión oficial.
 
+El generador conserva automáticamente en `localStorage` los seriales que ya creó.
+Así, cerrar y volver a abrir la página no reinicia la numeración. El archivo de
+respaldo solo es necesario si la generación continúa en otro navegador o equipo.
+
 ### 4.2 La capa que depende de juntar los datos
 
 Un teléfono solo conoce las fichas que escaneó **ese** teléfono. Si el club A le

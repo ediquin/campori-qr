@@ -55,8 +55,10 @@ Abrí `generador.html`:
    listos para recortar y darle al juez de esa estación.
 2. **Fichas de evaluación.** Una hoja por club, con su QR en la cabecera.
 
-El generador permite descargar un inventario como respaldo, pero el evaluador está
-en modo automático y no exige cargarlo en los teléfonos.
+El generador recuerda automáticamente los seriales en ese navegador y permite
+descargar un inventario como respaldo. El evaluador está en modo automático y no
+exige cargarlo en los teléfonos. El respaldo solo hace falta para continuar la
+numeración si se cambia de computadora o de navegador.
 
 Papel: cualquier hoja autoadhesiva A4. Imprimí **al 100%, sin "ajustar a página"**,
 o los 24 mm dejan de ser 24 mm.
