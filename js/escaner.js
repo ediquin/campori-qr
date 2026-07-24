@@ -14,6 +14,8 @@
 
 import { decodificar } from './qr-decoder.js';
 
+export const VERSION_LECTOR = '3 · mira central';
+
 // Con el lector propio conviene trabajar sobre una imagen mas chica que la del video:
 // alcanza y sobra para un codigo que ocupa buena parte del cuadro, y baja mucho el
 // costo por cuadro. A 480 de ancho un sticker que ocupe un tercio de la pantalla

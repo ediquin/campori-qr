@@ -4,7 +4,7 @@ import { CAMPORI, REGLAS, TOPE_FISICO, TOPE_ESPIRITUAL, etiquetaTipo } from './c
 import { CLUBES, buscarClub } from './clubes.js';
 import { leerQr } from './codigo.js';
 import { calcular, ESTADOS } from './puntaje.js';
-import { Escaner, pitido, vibrar, activarSonido } from './escaner.js?v=2';
+import { Escaner, VERSION_LECTOR, pitido, vibrar, activarSonido } from './escaner.js?v=3';
 import { aXlsx, aCsv, descargar } from './exportar.js';
 import * as sheets from './sheets.js';
 import * as almacen from './almacen.js';
@@ -594,7 +594,8 @@ async function pintarDiagnostico() {
   const seguro = window.isSecureContext;
   const todos = resultadosDeTodos();
   const lineas = [
-    ['✅', 'Lectura de QR con la cámara', await Escaner.descripcionMotor()],
+    ['✅', 'Lectura de QR con la cámara',
+      `Lector ${VERSION_LECTOR} · ${await Escaner.descripcionMotor()}`],
     [seguro ? '✅' : '❌', 'Contexto seguro (HTTPS)',
       seguro ? 'Sí, la cámara puede abrirse' : 'No. Sin HTTPS el navegador bloquea la cámara.'],
     [estado.inventario ? '✅' : '⚠️', 'Inventario de stickers',
