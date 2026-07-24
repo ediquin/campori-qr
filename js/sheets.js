@@ -13,7 +13,7 @@
 // autoriza realmente a leer y escribir en la planilla.
 
 export const URL_PREDETERMINADA =
-  'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
+  'https://script.google.com/macros/s/AKfycby2PyREewpwwiTkPXoceYlAUsH2pzDYbMMtZ3c6EVP0Oc_eE-7-otfUdoeSlgGLVCb0/exec';
 
 /**
  * Manda las hojas a la planilla.
