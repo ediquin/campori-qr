@@ -6,6 +6,7 @@ import { leerQr } from './codigo.js';
 import { calcular, ESTADOS } from './puntaje.js';
 import { Escaner, pitido, vibrar, activarSonido } from './escaner.js';
 import { aXlsx, aCsv, descargar } from './exportar.js';
+import * as sheets from './sheets.js';
 import * as almacen from './almacen.js';
 
 const $ = s => document.querySelector(s);
@@ -26,9 +27,30 @@ const estado = {
   todos: [],            // todos los escaneos de todos los clubes
   fichas: new Map(),
   inventario: null,     // Set de ids de sticker impresos, o null si no se cargo
+  dispositivo: '',      // quien evalua con este telefono
   escaner: null,
   linternaEncendida: false,
 };
+
+/**
+ * Clubes que tienen escaneos cargados desde mas de un telefono.
+ *
+ * No es un error por si mismo — puede que se hayan repartido el trabajo a proposito —
+ * pero casi siempre significa que dos personas evaluaron la misma ficha sin saberlo,
+ * y ahi la regla de "los 8 primeros" se resuelve por hora de escaneo entre telefonos
+ * con relojes que pueden no coincidir. Conviene revisarlo a mano.
+ */
+function clubesCruzados() {
+  const porClub = new Map();
+  for (const e of estado.todos) {
+    const quien = e.dispositivo || '(sin nombre)';
+    if (!porClub.has(e.idClub)) porClub.set(e.idClub, new Set());
+    porClub.get(e.idClub).add(quien);
+  }
+  return [...porClub.entries()]
+    .filter(([, quienes]) => quienes.size > 1)
+    .map(([idClub, quienes]) => ({ club: buscarClub(idClub), quienes: [...quienes] }));
+}
 
 // ------------------------------------------------------------------ calculo
 
@@ -240,7 +262,11 @@ async function procesarCodigo(texto) {
     return;
   }
 
-  const guardado = await almacen.agregarEscaneo({ idClub: estado.club.id, crudo: lectura.crudo });
+  const guardado = await almacen.agregarEscaneo({
+    idClub: estado.club.id,
+    crudo: lectura.crudo,
+    dispositivo: estado.dispositivo,
+  });
   if (guardado === 'duplicado') {
     pitido('aviso'); vibrar('aviso');
     const evento = leerQr(lectura.crudo);
@@ -369,7 +395,7 @@ function hojasParaExportar() {
     ]),
   ];
 
-  const detalle = [['Club', 'Región', 'Orden', 'Código', 'Evento', 'Tipo', 'Estado', 'Puntos', 'Motivo', 'Fecha y hora', 'Código QR']];
+  const detalle = [['Club', 'Región', 'Orden', 'Código', 'Evento', 'Tipo', 'Estado', 'Puntos', 'Motivo', 'Evaluador', 'Fecha y hora', 'Código QR']];
   const alertas = [['Club', 'Región', 'Nivel', 'Alerta']];
   for (const { club, resultado } of todos) {
     for (const d of resultado.detalle) {
@@ -378,6 +404,7 @@ function hojasParaExportar() {
         d.evento?.codigo || '', d.evento?.nombre || '',
         d.evento ? etiquetaTipo(d.evento.tipo) : '',
         ESTADOS[d.estado].etiqueta, d.puntos, d.detalleTexto || '',
+        d.escaneo.dispositivo || '',
         new Date(d.escaneo.ts).toLocaleString('es-BO'), d.escaneo.crudo,
       ]);
     }
@@ -402,10 +429,79 @@ function hojasParaExportar() {
 
   return [
     { nombre: 'Puntajes', filas: puntajes, anchos: [7, 26, 11, 20, 18, 26, 13, 13, 15, 15, 14, 10, 40, 13, 8, 12] },
-    { nombre: 'Detalle de escaneos', filas: detalle, anchos: [24, 11, 7, 8, 34, 11, 22, 8, 40, 19, 24] },
+    { nombre: 'Detalle de escaneos', filas: detalle, anchos: [24, 11, 7, 8, 34, 11, 22, 8, 40, 16, 19, 24] },
     { nombre: 'Alertas', filas: alertas, anchos: [24, 11, 8, 90] },
     { nombre: 'Parámetros', filas: parametros, anchos: [30, 50] },
   ];
+}
+
+// ------------------------------------------------------------------ Google Sheets
+
+function mostrarEstadoSheets(nivel, texto) {
+  $('#sheets-estado').innerHTML = `<div class="aviso-caja ${nivel}">${escapar(texto)}</div>`;
+}
+
+async function guardarSheets() {
+  await almacen.guardarAjuste('sheetsUrl', $('#sheets-url').value.trim());
+  await almacen.guardarAjuste('sheetsClave', $('#sheets-clave').value);
+  mostrarEstadoSheets('ok', 'Guardado en este teléfono. No se sube al repositorio.');
+}
+
+async function enviarASheets() {
+  await guardarSheets();
+  const url = $('#sheets-url').value.trim();
+  const clave = $('#sheets-clave').value;
+  const conDetalle = $('#sheets-detalle').checked;
+
+  const boton = $('#sheets-enviar');
+  boton.disabled = true;
+  boton.textContent = 'Enviando…';
+  mostrarEstadoSheets('', 'Subiendo los puntajes…');
+
+  // Sin el detalle son 72 filas; con el, unos cuantos miles. En una conexion
+  // floja conviene mandar solo lo primero.
+  const todas = hojasParaExportar();
+  const hojas = conDetalle ? todas : todas.filter(h => h.nombre === 'Puntajes' || h.nombre === 'Parámetros');
+
+  const r = await sheets.enviar(
+    { url, clave, dispositivo: estado.dispositivo || 'sin nombre' },
+    hojas.map(h => ({ nombre: h.nombre, filas: h.filas })),
+    CAMPORI.nombre
+  );
+
+  boton.disabled = false;
+  boton.textContent = 'Enviar puntajes ahora';
+  if (r.ok) {
+    mostrarEstadoSheets('ok', `Listo. Se actualizaron: ${(r.hojas || []).join(' · ')}. ` +
+      'Abrí tu planilla para verlo.');
+  } else {
+    mostrarEstadoSheets('alerta', r.error || 'No se pudo enviar.');
+  }
+}
+
+async function probarSheets() {
+  const boton = $('#sheets-probar');
+  boton.disabled = true;
+  mostrarEstadoSheets('', 'Probando…');
+  const r = await sheets.probar($('#sheets-url').value.trim());
+  boton.disabled = false;
+  if (r.ok) mostrarEstadoSheets('ok', r.mensaje || 'El script responde correctamente.');
+  else mostrarEstadoSheets('alerta', r.error || 'No respondió.');
+}
+
+// ------------------------------------------------------------------ varios telefonos
+
+function pintarCruces() {
+  const cruces = clubesCruzados();
+  $('#cruces-dispositivos').innerHTML = !cruces.length ? '' : `
+    <div class="aviso-caja alerta" style="margin-bottom:0">
+      <strong>${cruces.length} club${cruces.length === 1 ? '' : 'es'} con escaneos de más de un teléfono.</strong>
+      Revisá estas fichas a mano: si dos personas evaluaron la misma, la regla de los
+      8 primeros eventos físicos se resolvió por hora de escaneo entre teléfonos distintos.
+      <ul style="margin:8px 0 0;padding-left:18px">
+        ${cruces.map(c => `<li>${escapar(c.club?.nombre || '?')} — ${escapar(c.quienes.join(', '))}</li>`).join('')}
+      </ul>
+    </div>`;
 }
 
 // ------------------------------------------------------------------ ajustes
@@ -451,6 +547,11 @@ async function iniciar() {
   const guardado = await almacen.leerAjuste('inventario');
   if (Array.isArray(guardado)) estado.inventario = new Set(guardado);
 
+  estado.dispositivo = await almacen.leerAjuste('dispositivo', '') || '';
+  $('#nombre-dispositivo').value = estado.dispositivo;
+  $('#sheets-url').value = await almacen.leerAjuste('sheetsUrl', '') || '';
+  $('#sheets-clave').value = await almacen.leerAjuste('sheetsClave', '') || '';
+
   $('#filtro-region').innerHTML = '<option value="">Todas las regiones</option>' +
     [...new Set(CLUBES.map(c => c.region))].map(r => `<option>${escapar(r)}</option>`).join('');
 
@@ -458,7 +559,13 @@ async function iniciar() {
   $('#m-espirituales .valor').textContent = `0/${REGLAS.espiritualesObligatorios}`;
 
   pintarEstadoInventario();
+  pintarCruces();
   pintarClubes();
+
+  if (!estado.dispositivo) {
+    $('#estado-cabecera').textContent =
+      'Ponele nombre a este teléfono en Ajustes, sobre todo si evalúan entre varios.';
+  }
 
   if (!window.isSecureContext) {
     $('#estado-cabecera').textContent =
@@ -565,12 +672,21 @@ $('#importar-datos').addEventListener('change', e => {
   const lector = new FileReader();
   lector.onload = async () => {
     try {
+      const antes = clubesCruzados().length;
       const { nuevos, repetidos } = await almacen.importarTodo(JSON.parse(lector.result));
       estado.todos = await almacen.todosLosEscaneos();
       estado.fichas = await almacen.fichas();
       if (estado.club) await recargarEscaneos();
+      pintarCruces();
       pintarClubes();
-      alert(`Importado: ${nuevos} escaneos nuevos, ${repetidos} que ya tenías.`);
+
+      const cruces = clubesCruzados();
+      const nuevosCruces = cruces.length - antes;
+      alert(`Importado: ${nuevos} escaneos nuevos, ${repetidos} que ya tenías.` +
+        (nuevosCruces > 0
+          ? `\n\nATENCIÓN: ${nuevosCruces} club${nuevosCruces === 1 ? '' : 'es'} quedaron con escaneos ` +
+            'de más de un teléfono. Mirá el aviso rojo acá abajo y revisá esas fichas a mano.'
+          : ''));
     } catch (err) {
       alert('No pude importar: ' + err.message);
     }
@@ -578,12 +694,29 @@ $('#importar-datos').addEventListener('change', e => {
   lector.readAsText(archivo);
 });
 
+// --- este telefono
+$('#guardar-dispositivo').addEventListener('click', async () => {
+  estado.dispositivo = $('#nombre-dispositivo').value.trim();
+  await almacen.guardarAjuste('dispositivo', estado.dispositivo);
+  $('#estado-cabecera').textContent = estado.dispositivo
+    ? `Evaluando como: ${estado.dispositivo}`
+    : `${CAMPORI.nombre} · De vuelta a casa`;
+  alert(estado.dispositivo
+    ? `Listo. Los escaneos de este teléfono quedan a nombre de "${estado.dispositivo}".`
+    : 'Nombre borrado.');
+});
+
+// --- Google Sheets
+$('#sheets-guardar').addEventListener('click', guardarSheets);
+$('#sheets-probar').addEventListener('click', probarSheets);
+$('#sheets-enviar').addEventListener('click', enviarASheets);
+
 $('#borrar-todo').addEventListener('click', async () => {
   if (!confirm('¿Borrar TODOS los datos de TODOS los clubes de este teléfono?')) return;
   if (!confirm('Esto no se puede deshacer. ¿Seguro?')) return;
   await almacen.borrarTodo();
   estado.todos = []; estado.fichas = new Map(); estado.escaneos = [];
-  pintarClubes(); pintarDiagnostico();
+  pintarCruces(); pintarClubes(); pintarDiagnostico();
   alert('Listo, no quedan datos.');
 });
 

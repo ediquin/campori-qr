@@ -81,9 +81,55 @@ Abrí `evaluador.html` en el celular:
 4. Tocá **Marcar ficha como terminada**.
 5. En **Resultados**, **Descargar Excel**.
 
-Si evalúan con varios celulares: exportá desde cada uno (Ajustes → Exportar mis
-datos) e importá todo en el que vaya a generar la planilla final. Importar nunca
-borra: solo agrega lo que falta.
+### Evaluando entre varios
+
+Sí se puede, y es lo normal con 71 clubes. Cada teléfono guarda lo suyo y al final
+se juntan. Tres cosas que conviene respetar:
+
+1. **Repartan los clubes de antemano**, lo más simple es por región. Cada evaluador
+   toca solo sus clubes.
+2. **Pónganle nombre a cada teléfono** en `Ajustes → Este teléfono`. Queda anotado en
+   cada escaneo, y así la app puede avisar si dos personas evaluaron el mismo club.
+3. **Revisen que la hora de los celulares esté bien.** La regla de "los 8 primeros
+   eventos físicos" usa la hora del escaneo; con relojes desfasados, al juntar los
+   datos el orden puede salir distinto del real.
+
+Al final: `Ajustes → Exportar mis datos` en cada teléfono, y `Importar` todos en el
+que vaya a generar la planilla. Importar nunca borra: solo agrega lo que falta, y
+avisa si algún club quedó con escaneos de más de un teléfono.
+
+Si eso pasa, el puntaje **no se infla** — el tope de 8 eventos se aplica igual sobre
+el total combinado —, pero conviene mirar esas fichas a mano.
+
+Dos detalles que sí dependen de juntar los datos:
+
+- La detección de **stickers prestados entre clubes** compara contra lo que hay en
+  *ese* teléfono. Un sticker usado en dos clubes que están en teléfonos distintos
+  recién se detecta al unir todo.
+- El Excel final sale completo solo desde el teléfono donde se importó todo.
+
+### Enviar a Google Sheets (opcional)
+
+Además del Excel, la app puede subir los puntajes a una planilla de Google. Necesita
+internet **en el momento de enviar**: se usa al final, cuando vuelve la señal. No
+cambia nada del funcionamiento sin señal.
+
+Preparación, una sola vez:
+
+1. Creá una planilla nueva en Google Sheets.
+2. `Extensiones → Apps Script`. Borrá lo que haya y pegá
+   [`herramientas/apps-script.gs`](herramientas/apps-script.gs).
+3. Cambiá la línea de `CLAVE` por una frase tuya.
+4. `Implementar → Nueva implementación → Aplicación web`, con **Ejecutar como: Yo** y
+   **Quién tiene acceso: Cualquier usuario**.
+5. Copiá la dirección que termina en `/exec` y pegala en la app, en
+   `Ajustes → Enviar a Google Sheets`, junto con la misma clave.
+
+Cada envío **reemplaza** el contenido de las hojas, no lo agrega al final: podés
+mandar los datos las veces que quieras sin que se dupliquen.
+
+La dirección y la clave se guardan **en el teléfono**, nunca en el repositorio. Quien
+tenga esa dirección puede escribir en tu planilla, así que no la publiques.
 
 ---
 

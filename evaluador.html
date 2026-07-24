@@ -230,6 +230,27 @@
   <!-- ============================================== AJUSTES =========== -->
   <section class="vista" id="vista-ajustes">
     <div class="panel">
+      <h2>Este teléfono</h2>
+      <p class="chico tenue" style="margin-top:-6px">
+        Poné quién evalúa con este celular. Queda anotado en cada escaneo, así que
+        al juntar los datos de varios teléfonos se sabe quién cargó qué, y la app
+        puede avisar si dos personas evaluaron el mismo club sin querer.
+      </p>
+      <div class="fila">
+        <div>
+          <label for="nombre-dispositivo">Nombre del evaluador o del teléfono</label>
+          <input type="text" id="nombre-dispositivo" placeholder="Ej: Heber, o Celular 2" maxlength="40">
+        </div>
+        <div style="flex:0 0 auto"><button id="guardar-dispositivo">Guardar</button></div>
+      </div>
+      <div class="aviso-caja" id="aviso-reloj" style="margin-bottom:0">
+        <strong>Revisá que la hora del celular esté bien.</strong> La regla de "los 8
+        primeros eventos físicos" usa la hora de cada escaneo. Si dos teléfonos tienen
+        horas distintas, al juntarlos el orden puede salir cambiado.
+      </div>
+    </div>
+
+    <div class="panel">
       <h2>Inventario de stickers</h2>
       <p class="chico tenue" style="margin-top:-6px">
         Cargá el archivo que descargaste del generador. Sin él la app valida la firma
@@ -251,7 +272,7 @@
       <p class="chico tenue" style="margin-top:-6px">
         Si evalúan con varios celulares, exportá desde cada uno e importá todo en el
         que vaya a generar el Excel final. Importar nunca borra nada: solo agrega
-        lo que falta.
+        lo que falta, y avisa si un club fue evaluado desde más de un teléfono.
       </p>
       <div class="fila">
         <div><button class="principal" id="exportar-datos">Exportar mis datos</button></div>
@@ -260,6 +281,53 @@
           <input type="file" id="importar-datos" accept="application/json,.json">
         </div>
       </div>
+      <div id="cruces-dispositivos"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Enviar a Google Sheets <span class="pastilla">opcional</span></h2>
+      <p class="chico tenue" style="margin-top:-6px">
+        Sube los puntajes a una planilla de Google. Necesita internet <em>en el momento
+        de enviar</em>: se usa al final, cuando vuelve la señal. No cambia en nada el
+        funcionamiento sin señal — el teléfono sigue siendo la fuente de verdad.
+      </p>
+
+      <details style="margin-bottom:14px">
+        <summary class="chico" style="cursor:pointer;color:var(--acento-2)">Cómo preparar la planilla (una sola vez)</summary>
+        <ol class="chico tenue" style="line-height:1.7;padding-left:20px;margin-top:10px">
+          <li>Creá una planilla nueva en Google Sheets.</li>
+          <li>Entrá a <strong>Extensiones → Apps Script</strong>.</li>
+          <li>Borrá lo que haya y pegá el archivo <code>herramientas/apps-script.gs</code> del proyecto.</li>
+          <li>Cambiá la línea de <code>CLAVE</code> por una frase tuya.</li>
+          <li><strong>Implementar → Nueva implementación → Aplicación web</strong>, con
+            <em>Ejecutar como: Yo</em> y <em>Quién tiene acceso: Cualquier usuario</em>.</li>
+          <li>Copiá la dirección que termina en <code>/exec</code> y pegala acá abajo,
+            junto con la misma clave.</li>
+        </ol>
+      </details>
+
+      <div class="fila" style="margin-bottom:12px">
+        <div style="flex:3 1 320px">
+          <label for="sheets-url">Dirección del script (termina en /exec)</label>
+          <input type="url" id="sheets-url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+        </div>
+        <div>
+          <label for="sheets-clave">Clave</label>
+          <input type="text" id="sheets-clave" placeholder="la misma del script" autocomplete="off">
+        </div>
+      </div>
+
+      <label class="chico" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="sheets-detalle" checked style="accent-color:var(--acento)">
+        Incluir también el detalle de escaneos y las alertas
+      </label>
+
+      <div class="fila">
+        <div><button class="principal" id="sheets-enviar">Enviar puntajes ahora</button></div>
+        <div><button id="sheets-probar">Probar conexión</button></div>
+        <div><button id="sheets-guardar">Guardar dirección</button></div>
+      </div>
+      <div id="sheets-estado"></div>
     </div>
 
     <div class="panel">
