@@ -132,6 +132,7 @@ const historial = [];
 const muestras = [
   armarSticker('F03', 200, 147),
   armarSticker('E01', 200, 12),
+  armarSticker('A36', 50, 36),
   armarQrClub('C999'),
 ];
 $('#muestras').innerHTML = muestras.map(texto => {
@@ -140,7 +141,7 @@ $('#muestras').innerHTML = muestras.map(texto => {
   const rotulo = evento ? evento.nombre : 'Club de prueba (ediquin)';
   return `<figure>
     ${matrizASvg(generarMatriz(texto, { nivel: 'H', versionMinima: 2 }), { lado: 40 })}
-    <figcaption>${escapar(rotulo)}<br>${escapar(texto)}</figcaption>
+    <figcaption>${escapar(rotulo)}${evento ? ` · ${evento.puntos} pts` : ''}<br>${escapar(texto)}</figcaption>
   </figure>`;
 }).join('');
 
@@ -162,10 +163,19 @@ function mostrar(texto) {
     pitido('ok'); vibrar('ok');
   } else {
     const evento = buscarEvento(lectura.codigo);
-    clase = 'ok';
-    titulo = `${escapar(evento?.nombre || lectura.codigo)} · ${lectura.puntos} pts`;
-    detalle = `serial ${escapar(lectura.serial)}<br><span class="mono chico">${escapar(texto)}</span>`;
-    pitido('ok'); vibrar('ok');
+    if (!evento) {
+      clase = 'alerta';
+      titulo = `Evento fuera del catálogo: ${escapar(lectura.codigo)}`;
+      detalle = `serial ${escapar(lectura.serial)}<br><span class="mono chico">${escapar(texto)}</span>`;
+      pitido('error'); vibrar('error');
+    } else {
+      // Los QR operativos guardan código y serial. El puntaje oficial siempre se
+      // resuelve desde el catálogo; por eso `lectura.puntos` puede ser null.
+      clase = 'ok';
+      titulo = `${escapar(evento.nombre)} · ${evento.puntos} pts`;
+      detalle = `serial ${escapar(lectura.serial)}<br><span class="mono chico">${escapar(texto)}</span>`;
+      pitido('ok'); vibrar('ok');
+    }
   }
 
   caja.className = clase;
