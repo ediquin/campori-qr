@@ -48,23 +48,18 @@
 
 <header class="principal no-imprimir">
   <h1>Kit de prueba</h1>
-  <p>Un ensayo completo del sistema, de punta a punta, con el club que elijas</p>
+  <p>Una tanda genérica de QR únicos para probar con cualquier club</p>
 </header>
 
 <main>
   <section class="panel no-imprimir">
     <h2>Qué es esto</h2>
     <p class="chico tenue" style="margin-top:-6px">
-      Elegí cualquier club y el sistema preparará dos hojas: su ficha de ensayo y una
-      tanda de stickers genéricos. El club <strong>no está dentro de los QR de
-      eventos</strong>: cualquier tanda nueva puede usarse por primera vez con
-      cualquier club.
+      Estos QR <strong>no están asignados a ningún club</strong>. Primero elegís
+      manualmente cualquier club en el evaluador y después escaneás esta tanda. Cada
+      QR tiene un serial único, igual que los stickers que se imprimirán para el evento.
     </p>
     <div class="fila" style="margin:14px 0">
-      <div style="flex:1 1 360px">
-        <label for="club-kit">Club para esta prueba</label>
-        <select id="club-kit"></select>
-      </div>
       <div>
         <label>Tanda de QR</label>
         <button id="nueva-tanda">Crear una tanda nueva</button>
@@ -89,23 +84,21 @@
   <section class="panel no-imprimir">
     <h2>Cómo probarlo</h2>
     <ol class="pasos">
-      <li>Elegí el club. Si estos QR ya fueron escaneados antes, tocá
+      <li>Si estos QR ya fueron escaneados antes, tocá
         <strong>Crear una tanda nueva</strong>.</li>
-      <li><strong>Imprimí estas dos hojas</strong> con el botón de abajo. Al 100%, sin
-        "ajustar a página". O dejalas en pantalla para escanear desde ahí.</li>
+      <li><strong>Imprimí la hoja</strong> con el botón de abajo. Al 100%, sin
+        "ajustar a página". También podés escanear directamente desde la pantalla.</li>
       <li><strong>Descargá el inventario</strong> del kit (botón de abajo) y cargalo en
         el evaluador, en <code>Ajustes → Inventario de stickers</code>. Sin ese paso, la
         trampa del serial falsificado no se detecta.</li>
-      <li>Abrí <a href="evaluador.html">el evaluador</a> y escaneá <strong>el QR de la
-        cabecera de la ficha</strong>. Tiene que abrir el club
-        <em class="club-kit-nombre">—</em>.</li>
+      <li>Abrí <a href="evaluador.html">el evaluador</a> y
+        <strong>elegí manualmente cualquier club</strong>, incluido el club de prueba.</li>
       <li>Escaneá los stickers <strong>en el orden en que están impresos</strong>. Fijate
         que cada uno suene distinto según sea válido o trampa.</li>
       <li>Comparalo con el resultado esperado que está acá abajo. Tiene que dar
         <strong id="total-esperado">—</strong> puntos.</li>
       <li>Andá a <code>Resultados → Descargar Excel</code> y abrí la planilla.</li>
-      <li>Cuando termines, en el evaluador entrá a
-        <em class="club-kit-nombre">—</em> y tocá
+      <li>Cuando termines, entrá nuevamente al club que elegiste y tocá
         <code>Borrar todos los escaneos</code> para dejarlo limpio.</li>
     </ol>
   </section>
@@ -116,7 +109,7 @@
   </section>
 
   <div id="barra-impresion" class="no-imprimir">
-    <button class="principal" id="imprimir">Imprimir las dos hojas</button>
+    <button class="principal" id="imprimir">Imprimir la hoja de QR</button>
     <button id="bajar-inventario">Descargar inventario del kit</button>
     <span style="flex:1 1 auto"></span>
     <a href="index.html" class="chico tenue">volver al menú</a>
@@ -130,6 +123,6 @@
   <button id="cerrar-visor">Cerrar</button>
 </dialog>
 
-<script type="module" src="js/kit-prueba.js?v=3"></script>
+<script type="module" src="js/kit-prueba.js?v=4"></script>
 </body>
 </html>

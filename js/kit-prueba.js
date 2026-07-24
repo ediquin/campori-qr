@@ -1,13 +1,11 @@
-// Arma un ensayo completo del sistema en dos hojas: la ficha de un club y los
-// stickers para pegarle. Los stickers no son de relleno: cada uno esta elegido para
-// disparar una situacion distinta, incluidas las trampas que el sistema debe cazar.
+// Arma una tanda generica de stickers para ensayar con cualquier club. Ningun QR
+// lleva un club: cada uno tiene solamente evento, puntos, serial unico y firma.
 
 import {
-  CAMPORI, REGLAS, PUNTOS_EVENTO,
+  CAMPORI, PUNTOS_EVENTO,
   EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES, buscarEvento,
 } from './catalogo.js';
-import { CLUBES, CLUB_PRUEBA, buscarClub } from './clubes.js';
-import { armarSticker, armarQrClub } from './codigo.js';
+import { armarSticker } from './codigo.js';
 import { generarMatriz, matrizASvg } from './qr-encoder.js';
 import { calcular } from './puntaje.js';
 
@@ -15,10 +13,7 @@ const $ = s => document.querySelector(s);
 const escapar = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const svgDe = (texto, lado) => matrizASvg(generarMatriz(texto, { nivel: 'Q' }), { lado, margen: 4 });
 
-const AJUSTE_CLUB = 'campori-kit-club-v1';
 const AJUSTE_TANDA = 'campori-kit-tanda-v1';
-const clubGuardado = sessionStorage.getItem(AJUSTE_CLUB);
-let club = buscarClub(clubGuardado) || buscarClub(CLUB_PRUEBA);
 
 function crearBaseTanda(anterior = null) {
   let numero;
@@ -112,62 +107,7 @@ function resultadoEsperado() {
   return calcular(escaneos, { inventario: new Set(inventario.stickers) });
 }
 
-// ------------------------------------------------------------------ hojas
-
-function hojaFicha() {
-  const casillasFisicas = Array.from({ length: REGLAS.fisicosQueCuentan }, (_, i) => `
-    <div class="casilla">
-      <div class="rotulo"><span class="num">Evento ${i + 1} de ${REGLAS.fisicosQueCuentan}</span></div>
-      <div class="hueco">pegar sticker</div>
-    </div>`).join('');
-
-  const casillasEspirituales = EVENTOS_ESPIRITUALES.map(e => `
-    <div class="casilla">
-      <div class="rotulo"><span class="num">${e.codigo}</span> ${escapar(e.nombre)}</div>
-      <div class="hueco">pegar sticker</div>
-    </div>`).join('');
-
-  const casillasAdicionales = CRITERIOS_ADICIONALES.map(e => `
-    <div class="casilla">
-      <div class="rotulo"><span class="num">${e.codigo} · ${e.puntos} pts</span> ${escapar(e.nombre)}</div>
-      <div class="hueco">pegar sticker</div>
-    </div>`).join('');
-
-  return `<section class="hoja"><div class="ficha">
-    <div class="ficha-cabecera">
-      ${svgDe(armarQrClub(club.id), 24)}
-      <div class="datos">
-        <div class="nombre">${escapar(club.nombre)}</div>
-        <div class="meta">${escapar(club.region)} · ${escapar(club.iglesia)}</div>
-        <div class="id mono">${club.id}</div>
-      </div>
-      <div class="evento">
-        <strong>${escapar(CAMPORI.nombre)}</strong><br>
-        FICHA DE ENSAYO<br>
-        Datos de prueba
-      </div>
-    </div>
-
-    <h3>Eventos físicos
-      <span class="regla">Elijan ${REGLAS.fisicosQueCuentan} de los ${EVENTOS_FISICOS.length}. No repitan ninguno. ${PUNTOS_EVENTO} pts cada uno.</span>
-    </h3>
-    <div class="casillas">${casillasFisicas}</div>
-
-    <h3>Eventos espirituales
-      <span class="regla">Los ${REGLAS.espiritualesObligatorios} son obligatorios. ${PUNTOS_EVENTO} pts cada uno.</span>
-    </h3>
-    <div class="casillas">${casillasEspirituales}</div>
-
-    <h3>Puntaje adicional <span class="regla">Suma aparte del puntaje de eventos.</span></h3>
-    <div class="casillas angostas">${casillasAdicionales}</div>
-
-    <div class="ficha-pie">
-      <span>El QR de arriba identifica al club. No lo tapen ni lo doblen.</span>
-      <span class="firma">Firma del director/a</span>
-      <span class="firma">Recibido por</span>
-    </div>
-  </div></section>`;
-}
+// ------------------------------------------------------------------ hoja
 
 function hojaStickers() {
   const grupos = [];
@@ -198,8 +138,8 @@ function hojaStickers() {
 
   return `<section class="hoja"><div class="kit">
     <div class="kit-titulo">
-      <strong>Kit de ensayo — stickers para recortar</strong>
-      <span>Pegalos en la ficha de la hoja anterior, en el orden en que están acá.</span>
+      <strong>Kit de ensayo — QR genéricos y únicos</strong>
+      <span>Elegí cualquier club en el evaluador y escanealos en este orden.</span>
     </div>
     ${bloques}
   </div></section>`;
@@ -251,23 +191,9 @@ function bajarInventario() {
 
 function pintarKit() {
   pintarGuion();
-  $('#salida').innerHTML = hojaFicha() + hojaStickers();
+  $('#salida').innerHTML = hojaStickers();
   $('#tanda-kit').textContent = String(baseTanda).padStart(4, '0');
-  document.querySelectorAll('.club-kit-nombre').forEach(el => {
-    el.textContent = club.nombre;
-  });
 }
-
-$('#club-kit').innerHTML = CLUBES.map(c =>
-  `<option value="${c.id}"${c.id === club.id ? ' selected' : ''}>` +
-  `${escapar(c.nombre)} · ${escapar(c.region)} (${c.id})</option>`
-).join('');
-
-$('#club-kit').addEventListener('change', e => {
-  club = buscarClub(e.target.value);
-  sessionStorage.setItem(AJUSTE_CLUB, club.id);
-  pintarKit();
-});
 
 $('#nueva-tanda').addEventListener('click', () => {
   baseTanda = crearBaseTanda(baseTanda);
