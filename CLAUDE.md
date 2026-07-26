@@ -354,7 +354,7 @@ Archivos relevantes para continuarlo:
 URL predeterminada actual del Apps Script:
 
 ```text
-https://script.google.com/macros/s/AKfycbzNc5k6vQBXXjlnaWsu7Mjdu9QlW7z3oDsXLZUUA3cccYXjbAL_ZIZs17MDm5KBkWEA/exec
+https://script.google.com/macros/s/AKfycbxb6XecjnQH5mV2gE1vO-9avtspgWLxJTG8Xu-DEW1sr_i4h5swRY9SUASFW-zE2aRs/exec
 ```
 
 ## Reglas para cambios futuros

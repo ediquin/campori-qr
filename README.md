@@ -25,10 +25,10 @@ JavaScript que el navegador abre tal cual. Funciona sin señal.
 
 | Bloque | Eventos | Puntos c/u | Regla | Máximo |
 |---|---|---|---|---|
-| Físicos | 14 disponibles | 200 | Cuentan los 8 primeros escaneados | 1600 |
+| Físicos | 14 disponibles | 200 | Todos los eventos distintos suman; meta mínima 8 | 2800 |
 | Espirituales | 7 | 200 | Los 7 son obligatorios | 1400 |
-| **Base** | | | | **3000** |
-| Adicional | 29 eventos | 100 | Cada evento cuenta una vez, aparte del puntaje base | — |
+| **Base** | | | | **4200** |
+| Adicional | 36 eventos | 50 a 500 | Cada evento cuenta una vez, salvo Puntos extra | — |
 
 Cada sticker lleva un identificador aleatorio único, así que el sistema detecta
 eventos repetidos, stickers fotocopiados y stickers prestados entre clubes.
@@ -37,7 +37,7 @@ eventos repetidos, stickers fotocopiados y stickers prestados entre clubes.
 
 ```bash
 node herramientas/servidor.mjs      # http://localhost:8080
-node herramientas/pruebas.mjs       # 406 comprobaciones
+node herramientas/pruebas.mjs       # corre toda la batería de calidad
 node herramientas/generar-clubes.mjs  # regenera el padrón desde el Excel
 ```
 

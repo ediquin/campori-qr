@@ -1,7 +1,8 @@
 // App de evaluacion: escanea las fichas con la camara y arma el puntaje por club.
 
 import {
-  CAMPORI, REGLAS, TOPE_FISICO, TOPE_ESPIRITUAL, TODOS_LOS_ITEMS,
+  CAMPORI, REGLAS, PUNTOS_EVENTO, TOPE_FISICO, TOPE_ESPIRITUAL, TODOS_LOS_ITEMS,
+  CANTIDAD_EVENTOS_FISICOS,
   EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, CRITERIOS_ADICIONALES, SANCIONES,
   etiquetaTipo,
 } from './catalogo.js';
@@ -10,7 +11,7 @@ import { leerQr } from './codigo.js';
 import { calcular, ESTADOS } from './puntaje.js';
 import { Escaner, VERSION_LECTOR, pitido, vibrar, activarSonido } from './escaner.js?v=5';
 import { aXlsx, aCsv, descargar } from './exportar.js';
-import * as sheets from './sheets.js?v=4';
+import * as sheets from './sheets.js?v=11';
 import * as almacen from './almacen.js';
 
 const $ = s => document.querySelector(s);
@@ -23,7 +24,7 @@ const CLUBES_OFICIALES = CLUBES.filter(c => c.id !== CLUB_PRUEBA);
 const signo = n => n > 0 ? `+${n}` : n < 0 ? `${n}` : '—';
 
 const ICONOS = {
-  contado: '✅', club: '🏷️', repetido: '🔁', excedente: '🔢',
+  contado: '✅', club: '🏷️', repetido: '🔁',
   serial_repetido: '🔁', serial_ajeno: '🚨',
   desconocido: '❓', invalido: '❌', desplazado: '⚖️',
 };
@@ -43,10 +44,17 @@ const estado = {
   conectado: false,
   versionSheets: 0,
   sincronizando: false,
+  reconciliando: false,
   pendientes: new Set(),
   eventosPendientes: new Map(), // ID club -> códigos de las celdas modificadas
+  revisionesPendientes: new Map(), // ID club -> versión local de sus cambios
+  versionCambiosPendientes: 0,
+  clubesEnMutacion: new Map(), // ID club -> operaciones locales aún no encoladas
   eventosHoja: [],
   puntajesHoja: new Map(),
+  detalleDisponible: null,
+  revisionesDetalle: new Map(),
+  urlRevisionesDetalle: '',
   temporizadorSync: null,
   intervaloSync: null,
   resolverDecisionCache: null,
@@ -92,12 +100,10 @@ function resultadoLocal(idClub, escaneos) {
 }
 
 function puntajesPorEvento(resultado) {
-  const valores = Object.fromEntries(TODOS_LOS_ITEMS.map(e => [e.codigo, 0]));
-  for (const d of resultado.detalle || []) {
-    const codigo = d.evento?.codigo;
-    if (codigo && codigo in valores) valores[codigo] += Number(d.puntos) || 0;
-  }
-  return valores;
+  return sheets.puntajesDesdeDetalle(
+    resultado.detalle,
+    TODOS_LOS_ITEMS.map(e => e.codigo)
+  );
 }
 
 function codigosQueCambiaron(antes, despues) {
@@ -114,10 +120,14 @@ function resultadoConPuntajesDeHoja(idClub, base) {
   const remota = estado.puntajesHoja.get(idClub);
   if (!remota) return base;
 
-  const valores = { ...remota.eventos };
+  const locales = puntajesPorEvento(base);
+  const valores = sheets.aplicarConflictosDeSerial(
+    remota.eventos,
+    locales,
+    base.detalle
+  );
   const pendientes = estado.eventosPendientes.get(idClub);
   if (pendientes?.size) {
-    const locales = puntajesPorEvento(base);
     for (const codigo of pendientes) valores[codigo] = locales[codigo] || 0;
   }
 
@@ -159,12 +169,144 @@ function resultadoConPuntajesDeHoja(idClub, base) {
     totalBruto,
     total: Math.max(0, totalBruto),
     totalBase: fisico.puntos + espiritual.puntos,
-    completo: faltantes.length === 0 && fisico.eventos.length === REGLAS.fisicosQueCuentan,
+    completo: faltantes.length === 0
+      && fisico.eventos.length >= REGLAS.fisicosMinimosParaCompletar,
   };
 }
 
 function resultadoDe(idClub, escaneos) {
   return resultadoConPuntajesDeHoja(idClub, resultadoLocal(idClub, escaneos));
+}
+
+/**
+ * Compara el cálculo auditable desde los QR de Detalle con la matriz que manda en
+ * pantalla. Los cambios locales pendientes se omiten porque todavía están viajando.
+ */
+function auditarConsistenciaPuntajes() {
+  const diferencias = [];
+  const totalesIncorrectos = [];
+  const clubesFaltantes = [];
+  const codigosHoja = new Set(estado.eventosHoja.map(e => e.codigo));
+  const eventosFaltantes = TODOS_LOS_ITEMS
+    .map(e => e.codigo)
+    .filter(codigo => !codigosHoja.has(codigo));
+  if (estado.versionSheets < 2 || !estado.puntajesHoja.size) {
+    return {
+      disponible: false,
+      diferencias,
+      totalesIncorrectos,
+      clubesFaltantes,
+      eventosFaltantes,
+      clubes: 0,
+      celdas: 0,
+    };
+  }
+
+  const escaneosPorClub = new Map();
+  for (const escaneo of estado.todos) {
+    if (!escaneosPorClub.has(escaneo.idClub)) escaneosPorClub.set(escaneo.idClub, []);
+    escaneosPorClub.get(escaneo.idClub).push(escaneo);
+  }
+  const codigos = TODOS_LOS_ITEMS.map(e => e.codigo);
+
+  for (const club of CLUBES_OFICIALES) {
+    const remota = estado.puntajesHoja.get(club.id);
+    if (!remota) {
+      clubesFaltantes.push({ idClub: club.id, club: club.nombre });
+      continue;
+    }
+    const pendientes = estado.eventosPendientes.get(club.id);
+    const pendienteLegado = estado.pendientes.has(club.id) && !pendientes;
+    const locales = puntajesPorEvento(resultadoLocal(
+      club.id,
+      escaneosPorClub.get(club.id) || []
+    ));
+    if (!pendienteLegado) {
+      for (const diferencia of sheets.diferenciasDePuntajes(locales, remota.eventos, codigos)) {
+        if (!pendientes?.has(diferencia.codigo)) {
+          diferencias.push({ idClub: club.id, club: club.nombre, ...diferencia });
+        }
+      }
+    }
+
+    if (!estado.pendientes.has(club.id)) {
+      const calculado = sheets.totalDesdeEventos(remota.eventos);
+      const valorIncorrecto = calculado !== Number(remota.total || 0);
+      const formulaIncorrecta = estado.versionSheets >= 3 && !remota.totalConFormula;
+      if (valorIncorrecto || formulaIncorrecta) {
+        totalesIncorrectos.push({
+          idClub: club.id,
+          club: club.nombre,
+          remoto: Number(remota.total || 0),
+          calculado,
+          formulaIncorrecta,
+        });
+      }
+    }
+  }
+
+  return {
+    disponible: true,
+    diferencias,
+    totalesIncorrectos,
+    clubesFaltantes,
+    eventosFaltantes,
+    clubes: new Set(diferencias.map(d => d.idClub)).size,
+    celdas: diferencias.length,
+  };
+}
+
+function cantidadProblemasAuditoria(auditoria) {
+  return auditoria.celdas
+    + auditoria.totalesIncorrectos.length
+    + auditoria.clubesFaltantes.length
+    + auditoria.eventosFaltantes.length;
+}
+
+function matrizNecesitaPreparacion() {
+  const codigos = new Set(estado.eventosHoja.map(e => e.codigo));
+  const ids = new Set(estado.puntajesHoja.keys());
+  return TODOS_LOS_ITEMS.some(e => !codigos.has(e.codigo))
+    || CLUBES_OFICIALES.some(club => !ids.has(club.id));
+}
+
+function pintarAvisoConsistencia() {
+  const caja = $('#aviso-consistencia');
+  if (!caja) return;
+  const auditoria = auditarConsistenciaPuntajes();
+  const problemas = cantidadProblemasAuditoria(auditoria);
+  caja.classList.toggle('oculto', !auditoria.disponible || problemas === 0);
+  if (!auditoria.disponible || problemas === 0) {
+    caja.textContent = '';
+    return;
+  }
+  const partes = [];
+  if (auditoria.celdas) {
+    partes.push(`${auditoria.celdas} celda${auditoria.celdas === 1 ? '' : 's'} de ` +
+      `${auditoria.clubes} club${auditoria.clubes === 1 ? '' : 'es'} no coinciden con sus QR`);
+  }
+  if (auditoria.totalesIncorrectos.length) {
+    partes.push(`${auditoria.totalesIncorrectos.length} TOTAL tiene un valor o fórmula incorrectos`);
+  }
+  if (auditoria.clubesFaltantes.length) {
+    partes.push(`${auditoria.clubesFaltantes.length} clubes faltan en la matriz`);
+  }
+  if (auditoria.eventosFaltantes.length) {
+    partes.push(`${auditoria.eventosFaltantes.length} columnas de eventos faltan en la matriz`);
+  }
+  caja.innerHTML = `<strong>⚠️ Revisión de puntajes:</strong> ${escapar(partes.join('; '))}. ` +
+    'En Ajustes podés normalizar el molde, comparar y recalcular explícitamente desde Detalle.';
+}
+
+function clubesConVariosEvaluadores() {
+  const porClub = new Map();
+  for (const escaneo of estado.todos) {
+    const nombre = String(escaneo.dispositivo || '').trim();
+    if (!nombre) continue;
+    if (!porClub.has(escaneo.idClub)) porClub.set(escaneo.idClub, new Set());
+    porClub.get(escaneo.idClub).add(nombre);
+  }
+  return [...porClub].filter(([, nombres]) => nombres.size > 1);
 }
 
 function clubTienePuntaje(idClub, escaneos = []) {
@@ -203,6 +345,7 @@ function mostrarVista(nombre) {
 // ------------------------------------------------------------------ lista de clubes
 
 function pintarClubes() {
+  pintarAvisoConsistencia();
   const texto = $('#buscar').value.trim().toLowerCase();
   const region = $('#filtro-region').value;
   const filtroEstado = $('#filtro-estado').value;
@@ -233,7 +376,7 @@ function pintarClubes() {
     else if (conPuntaje) marcas.push('<span class="pastilla info">en curso</span>');
     if (graves) marcas.push(`<span class="pastilla alerta">${graves} alerta${graves === 1 ? '' : 's'}</span>`);
     if (conPuntaje) {
-      marcas.push(`<span class="pastilla">F ${resultado.fisico.hechos}/${REGLAS.fisicosQueCuentan}</span>`);
+      marcas.push(`<span class="pastilla">F ${resultado.fisico.hechos}/${CANTIDAD_EVENTOS_FISICOS}</span>`);
       marcas.push(`<span class="pastilla${resultado.espiritual.faltantes.length ? ' aviso' : ' ok'}">E ${resultado.espiritual.hechos}/${REGLAS.espiritualesObligatorios}</span>`);
     }
     return `<button class="tarjeta-club" data-club="${club.id}">
@@ -276,8 +419,8 @@ function pintarFicha() {
     el.classList.toggle('completo', clase === 'completo');
     el.classList.toggle('falta', clase === 'falta');
   };
-  marcador('#m-fisicos', `${r.fisico.hechos}/${REGLAS.fisicosQueCuentan}`,
-    r.fisico.hechos === REGLAS.fisicosQueCuentan ? 'completo' : r.fisico.hechos ? 'falta' : '');
+  marcador('#m-fisicos', `${r.fisico.hechos}/${CANTIDAD_EVENTOS_FISICOS}`,
+    r.fisico.hechos >= REGLAS.fisicosMinimosParaCompletar ? 'completo' : r.fisico.hechos ? 'falta' : '');
   marcador('#m-espirituales', `${r.espiritual.hechos}/${REGLAS.espiritualesObligatorios}`,
     r.espiritual.faltantes.length === 0 ? 'completo' : r.espiritual.hechos ? 'falta' : '');
   marcador('#m-adicional', r.adicional.puntos, '');
@@ -316,22 +459,34 @@ function pintarFicha() {
 
   $$('#lista-escaneos .quitar').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('¿Quitar este escaneo de la ficha?')) return;
-    const antes = resultadoLocal(estado.club.id, estado.escaneos);
-    await almacen.borrarEscaneo(estado.club.id, b.dataset.crudo);
-    await recargarEscaneos();
-    const despues = resultadoLocal(estado.club.id, estado.escaneos);
-    await marcarPendiente(estado.club.id, codigosQueCambiaron(antes, despues));
-    pintarFicha();
+    const idClub = estado.club.id;
+    await duranteMutacionClub(idClub, async () => {
+      const escaneosAntes = await almacen.escaneosDeClub(idClub);
+      const antes = resultadoLocal(idClub, escaneosAntes);
+      await almacen.borrarEscaneo(idClub, b.dataset.crudo);
+      const escaneosDespues = await recargarEscaneosDeClub(idClub);
+      const despues = resultadoLocal(idClub, escaneosDespues);
+      await marcarPendiente(idClub, codigosQueCambiaron(antes, despues));
+      if (estado.club?.id === idClub) pintarFicha();
+    });
   }));
 
   const ficha = estado.fichas.get(estado.club.id);
   $('#cerrar-ficha').textContent = ficha?.cerrada ? 'Reabrir ficha' : 'Marcar ficha como terminada';
 }
 
-async function recargarEscaneos() {
-  estado.escaneos = await almacen.escaneosDeClub(estado.club.id);
+async function recargarEscaneosDeClub(idClub) {
+  const escaneos = await almacen.escaneosDeClub(idClub);
   estado.todos = await almacen.todosLosEscaneos();
+  if (estado.club?.id === idClub) estado.escaneos = escaneos;
+  return escaneos;
+}
+
+async function recargarEscaneos() {
+  if (!estado.club) return [];
+  const escaneos = await recargarEscaneosDeClub(estado.club.id);
   pintarFicha();
+  return escaneos;
 }
 
 function avisar(nivel, icono, titulo, sub) {
@@ -377,48 +532,64 @@ async function procesarCodigo(texto) {
     return;
   }
 
-  const antes = resultadoLocal(estado.club.id, estado.escaneos);
-  const guardado = await almacen.agregarEscaneo({
-    idClub: estado.club.id,
-    crudo: lectura.crudo,
-    dispositivo: estado.dispositivo,
+  const idClub = estado.club.id;
+  const nombreClub = estado.club.nombre;
+  await duranteMutacionClub(idClub, async () => {
+    const escaneosAntes = await almacen.escaneosDeClub(idClub);
+    const antes = resultadoLocal(idClub, escaneosAntes);
+    const guardado = await almacen.agregarEscaneo({
+      idClub,
+      crudo: lectura.crudo,
+      dispositivo: estado.dispositivo,
+    });
+    if (guardado === 'duplicado') {
+      pitido('aviso'); vibrar('aviso');
+      const evento = leerQr(lectura.crudo);
+      avisar('aviso', '🔁', 'Este sticker ya estaba cargado',
+        `El sticker ${evento.id} ya figura en la ficha de ${nombreClub}.`);
+      return;
+    }
+
+    const escaneosDespues = await recargarEscaneosDeClub(idClub);
+    const despues = resultadoLocal(idClub, escaneosDespues);
+    await marcarPendiente(idClub, codigosQueCambiaron(antes, despues));
+    if (estado.club?.id === idClub) pintarFicha();
+
+    // Buscamos como quedó ESTE escaneo dentro del resultado recalculado, para poder
+    // avisar exactamente por qué se contó o por qué no.
+    const r = resultadoDe(idClub, escaneosDespues);
+    const mio = r.detalle.find(d => d.escaneo.crudo === lectura.crudo);
+    if (!mio) return;
+
+    const info = ESTADOS[mio.estado];
+    const nombre = mio.evento ? mio.evento.nombre : lectura.crudo;
+    if (mio.estado === 'contado' && mio.evento.tipo === 'sancion') {
+      // Una sanción entró bien, pero es mala noticia: se muestra en rojo y con
+      // sonido de aviso, no con el tono de éxito de los eventos.
+      pitido('aviso'); vibrar('aviso');
+      avisar('alerta', '⛔', `${mio.puntos} · ${nombre}`,
+        `Sanción · total del club: ${r.total} pts`);
+    } else if (mio.estado === 'contado') {
+      pitido('ok'); vibrar('ok');
+      avisar('ok', '✅', `${signo(mio.puntos)} · ${nombre}`,
+        `${etiquetaTipo(mio.evento.tipo)} · total del club: ${r.total} pts`);
+    } else {
+      const grave = info.nivel === 'alerta';
+      pitido(grave ? 'error' : 'aviso'); vibrar(grave ? 'error' : 'aviso');
+      avisar(info.nivel, ICONOS[mio.estado] || '⚠️', `${info.etiqueta}: ${nombre}`, mio.detalleTexto || '');
+    }
   });
-  if (guardado === 'duplicado') {
-    pitido('aviso'); vibrar('aviso');
-    const evento = leerQr(lectura.crudo);
-    avisar('aviso', '🔁', 'Este sticker ya estaba cargado',
-      `El sticker ${evento.id} ya figura en la ficha de ${estado.club.nombre}.`);
-    return;
-  }
+}
 
-  await recargarEscaneos();
-  const despues = resultadoLocal(estado.club.id, estado.escaneos);
-  await marcarPendiente(estado.club.id, codigosQueCambiaron(antes, despues));
-  pintarFicha();
-
-  // Buscamos como quedo ESTE escaneo dentro del resultado recalculado, para poder
-  // avisar exactamente por que se conto o por que no.
-  const r = resultadoDe(estado.club.id, estado.escaneos);
-  const mio = r.detalle.find(d => d.escaneo.crudo === lectura.crudo);
-  if (!mio) return;
-
-  const info = ESTADOS[mio.estado];
-  const nombre = mio.evento ? mio.evento.nombre : lectura.crudo;
-  if (mio.estado === 'contado' && mio.evento.tipo === 'sancion') {
-    // Una sancion entro bien, pero es mala noticia: se muestra en rojo y con
-    // sonido de aviso, no con el tono de exito de los eventos.
-    pitido('aviso'); vibrar('aviso');
-    avisar('alerta', '⛔', `${mio.puntos} · ${nombre}`,
-      `Sanción · total del club: ${r.total} pts`);
-  } else if (mio.estado === 'contado') {
-    pitido('ok'); vibrar('ok');
-    avisar('ok', '✅', `${signo(mio.puntos)} · ${nombre}`,
-      `${etiquetaTipo(mio.evento.tipo)} · total del club: ${r.total} pts`);
-  } else {
-    const grave = info.nivel === 'alerta';
-    pitido(grave ? 'error' : 'aviso'); vibrar(grave ? 'error' : 'aviso');
-    avisar(info.nivel, ICONOS[mio.estado] || '⚠️', `${info.etiqueta}: ${nombre}`, mio.detalleTexto || '');
-  }
+let colaCodigos = Promise.resolve();
+function encolarCodigo(texto) {
+  colaCodigos = colaCodigos
+    .then(() => procesarCodigo(texto))
+    .catch(error => {
+      console.error(error);
+      avisar('alerta', '❌', 'No se pudo guardar el QR', error?.message || String(error));
+    });
+  return colaCodigos;
 }
 
 // ------------------------------------------------------------------ camara
@@ -428,7 +599,7 @@ async function encenderCamara() {
     // Este click es el gesto que iOS exige para poder emitir sonido despues.
     activarSonido();
     $('#mensaje-camara').textContent = 'Pidiendo permiso de cámara…';
-    estado.escaner = new Escaner($('#video'), texto => { procesarCodigo(texto); });
+    estado.escaner = new Escaner($('#video'), texto => { encolarCodigo(texto); });
     await estado.escaner.iniciar();
     $('#camara-apagada').classList.add('oculto');
     $('#mira').hidden = false;
@@ -559,8 +730,9 @@ function hojasParaExportar({ soloConEscaneos = false, idsClub = null } = {}) {
     ['Campori', CAMPORI.nombre],
     ['Exportado', fecha],
     ['Clubes en el padrón', CLUBES_OFICIALES.length],
-    ['Puntos por evento', TOPE_FISICO / REGLAS.fisicosQueCuentan],
-    ['Eventos físicos que cuentan', `${REGLAS.fisicosQueCuentan} de 14 (valen los primeros escaneados)`],
+    ['Puntos por evento físico/espiritual', PUNTOS_EVENTO],
+    ['Eventos físicos', `${CANTIDAD_EVENTOS_FISICOS} disponibles; todos los distintos suman`],
+    ['Meta física para completar', REGLAS.fisicosMinimosParaCompletar],
     ['Máximo físico', TOPE_FISICO],
     ['Eventos espirituales', `${REGLAS.espiritualesObligatorios}, todos obligatorios`],
     ['Máximo espiritual', TOPE_ESPIRITUAL],
@@ -583,14 +755,91 @@ function mostrarEstadoSheets(nivel, texto) {
   $('#sheets-estado').innerHTML = `<div class="aviso-caja ${nivel}">${escapar(texto)}</div>`;
 }
 
+function urlSheetsActual() {
+  return String($('#sheets-url')?.value || estado.urlRevisionesDetalle || '').trim();
+}
+
+async function guardarRevisionesDetalle() {
+  const url = urlSheetsActual();
+  estado.urlRevisionesDetalle = url;
+  await almacen.guardarAjuste(
+    'revisionesDetalle',
+    sheets.serializarRevisionesDetalle(url, estado.revisionesDetalle)
+  );
+}
+
+async function asegurarUrlRevisionesDetalle(url) {
+  const limpia = String(url || '').trim();
+  if (estado.urlRevisionesDetalle === limpia) return;
+  estado.urlRevisionesDetalle = limpia;
+  estado.revisionesDetalle.clear();
+  await guardarRevisionesDetalle();
+}
+
 async function guardarSheets() {
   const url = $('#sheets-url').value.trim();
   const clave = $('#sheets-clave').value;
+  await asegurarUrlRevisionesDetalle(url);
   await almacen.guardarAjuste('sheetsUrl', url);
   await almacen.guardarAjuste('sheetsClave', clave);
   $('#conexion-url').value = url;
   $('#conexion-clave').value = clave;
   mostrarEstadoSheets('ok', 'Guardado en este teléfono. No se sube al repositorio.');
+}
+
+let colaDatos = Promise.resolve();
+let finReconciliacion = Promise.resolve();
+let liberarReconciliacion = null;
+
+function iniciarReconciliacion() {
+  estado.reconciliando = true;
+  finReconciliacion = new Promise(resolver => { liberarReconciliacion = resolver; });
+}
+
+function terminarReconciliacion() {
+  estado.reconciliando = false;
+  const liberar = liberarReconciliacion;
+  liberarReconciliacion = null;
+  if (liberar) liberar();
+}
+
+async function esperarFinReconciliacion() {
+  while (estado.reconciliando) await finReconciliacion;
+}
+
+async function conDatosExclusivos(tarea) {
+  const anterior = colaDatos;
+  let liberar;
+  colaDatos = new Promise(resolver => { liberar = resolver; });
+  await anterior;
+  try {
+    return await tarea();
+  } finally {
+    liberar();
+  }
+}
+
+function iniciarMutacionClub(idClub) {
+  const cantidad = Number(estado.clubesEnMutacion.get(idClub)) || 0;
+  estado.clubesEnMutacion.set(idClub, cantidad + 1);
+}
+
+function terminarMutacionClub(idClub) {
+  const cantidad = (Number(estado.clubesEnMutacion.get(idClub)) || 1) - 1;
+  if (cantidad > 0) estado.clubesEnMutacion.set(idClub, cantidad);
+  else estado.clubesEnMutacion.delete(idClub);
+}
+
+async function duranteMutacionClub(idClub, tarea) {
+  // Una lectura de cámara que llegue mientras se compara queda en espera y se
+  // procesa después. No se mezcla con el parche inmutable de reconciliación.
+  await esperarFinReconciliacion();
+  iniciarMutacionClub(idClub);
+  try {
+    return await conDatosExclusivos(tarea);
+  } finally {
+    terminarMutacionClub(idClub);
+  }
 }
 
 async function guardarPendientes() {
@@ -599,10 +848,18 @@ async function guardarPendientes() {
     'eventosPendientes',
     [...estado.eventosPendientes].map(([id, codigos]) => [id, [...codigos]])
   );
+  await guardarRevisionesDetalle();
 }
 
-async function marcarPendiente(idClub, codigos = null) {
-  if (!idClub || idClub === CLUB_PRUEBA) return;
+function registrarCambioPendiente(idClub) {
+  estado.versionCambiosPendientes += 1;
+  const anterior = Number(estado.revisionesPendientes.get(idClub)) || 0;
+  estado.revisionesPendientes.set(idClub, anterior + 1);
+}
+
+function agregarPendienteEnMemoria(idClub, codigos = null) {
+  if (!idClub || idClub === CLUB_PRUEBA) return false;
+  registrarCambioPendiente(idClub);
   estado.pendientes.add(idClub);
   if (!estado.eventosPendientes.has(idClub)) estado.eventosPendientes.set(idClub, new Set());
   const conjunto = estado.eventosPendientes.get(idClub);
@@ -610,6 +867,11 @@ async function marcarPendiente(idClub, codigos = null) {
   for (const codigo of afectados) {
     if (TODOS_LOS_ITEMS.some(e => e.codigo === codigo)) conjunto.add(codigo);
   }
+  return true;
+}
+
+async function marcarPendiente(idClub, codigos = null) {
+  if (!agregarPendienteEnMemoria(idClub, codigos)) return;
   await guardarPendientes();
   programarSincronizacion();
 }
@@ -619,15 +881,19 @@ function programarSincronizacion() {
   estado.temporizadorSync = setTimeout(() => sincronizarAutomaticamente(), 900);
 }
 
-async function enviarClubes(idsClub, silencioso = false) {
+async function enviarClubes(idsClub, silencioso = false, { soloPuntajes = false } = {}) {
   const ids = [...new Set(idsClub || [])].filter(id => id && id !== CLUB_PRUEBA);
   if (!ids.length) return { ok: true, hojas: [] };
+  const revisionesEnviadas = sheets.capturarRevisionesPendientes(
+    estado.revisionesPendientes,
+    ids
+  );
   const url = $('#sheets-url').value.trim();
   const clave = $('#sheets-clave').value;
   if (!url || !clave) return { ok: false, error: 'Falta conectar la aplicación con Google Sheets.' };
 
   if (!silencioso) mostrarEstadoSheets('', `Enviando ${ids.length} club${ids.length === 1 ? '' : 'es'}…`);
-  const hojas = hojasParaExportar({ idsClub: ids });
+  const hojas = soloPuntajes ? [] : hojasParaExportar({ idsClub: ids });
   const nombres = resultadosDeTodos()
     .filter(t => ids.includes(t.club.id))
     .map(t => t.club.nombre);
@@ -646,14 +912,26 @@ async function enviarClubes(idsClub, silencioso = false) {
       eventos[codigo] = Number(locales[codigo]) || 0;
       anteriores[codigo] = Number(remotos[codigo]) || 0;
     }
-    return {
+    const cambio = {
       idClub,
       eventos,
       anteriores,
       estado: datosClub?.ficha?.cerrada ? 'Terminada'
         : datosClub?.escaneos?.length ? 'En curso' : 'Sin evaluar',
     };
+    if (estado.versionSheets >= 3) {
+      cambio.revisionDetalle = estado.revisionesDetalle.get(idClub) || '';
+    }
+    return cambio;
   });
+  if (estado.versionSheets >= 3 && cambios.some(cambio => !cambio.revisionDetalle)) {
+    return {
+      ok: false,
+      error: 'No existe una huella base segura para uno de los clubes guardados en caché, ' +
+        'y Google Sheets ya tiene escaneos para ese club. Para no pisarlos, elegí ' +
+        '"Descartar cambios locales y usar Google Sheets" o revisá el caso manualmente.',
+    };
+  }
 
   const r = await sheets.enviar(
     {
@@ -671,10 +949,8 @@ async function enviarClubes(idsClub, silencioso = false) {
     CAMPORI.nombre,
     {
       cambios,
-      padron: CLUBES_OFICIALES.map(({ id, nombre, region }) => ({ id, nombre, region })),
-      eventos: TODOS_LOS_ITEMS.map(({ codigo, nombre, tipo, puntos }) =>
-        ({ codigo, nombre, tipo, puntos })
-      ),
+      padron: padronParaSheets(),
+      eventos: eventosParaSheets(),
     }
   );
 
@@ -682,10 +958,31 @@ async function enviarClubes(idsClub, silencioso = false) {
     ? r.aplicados
     : r.ok ? ids : [];
   if (aplicados.length) {
-    aplicados.forEach(id => {
-      estado.pendientes.delete(id);
-      estado.eventosPendientes.delete(id);
-    });
+    if (Number(r.version) >= 3) {
+      const revisionesConfirmadas = sheets.normalizarRevisionesDetalle(r.revisionesDetalle);
+      const sinRevision = aplicados.filter(idClub => !revisionesConfirmadas.has(idClub));
+      if (sinRevision.length) {
+        return {
+          ...r,
+          ok: false,
+          error: 'El Apps Script aplicó cambios pero no devolvió su nueva huella de Detalle. ' +
+            'Se conservaron como pendientes; publicá la versión actual de herramientas/apps-script.gs.',
+        };
+      }
+      estado.revisionesDetalle = sheets.aplicarRevisionesConfirmadas(
+        estado.revisionesDetalle,
+        revisionesConfirmadas,
+        aplicados
+      );
+      await guardarRevisionesDetalle();
+    }
+    sheets.confirmarPendientesAplicados(
+      aplicados,
+      revisionesEnviadas,
+      estado.revisionesPendientes,
+      estado.pendientes,
+      estado.eventosPendientes
+    );
     await guardarPendientes();
     if (!silencioso) mostrarEstadoSheets('ok', 'Cambios enviados. Actualizando desde la planilla…');
   }
@@ -706,34 +1003,70 @@ async function aplicarEstadoRemoto(r) {
       error: 'El Apps Script instalado es anterior. Volvé a copiar herramientas/apps-script.gs y publicá una versión nueva.',
     };
   }
-
-  const escaneos = sheets.normalizarEscaneos(r.escaneos);
-  await almacen.reemplazarEscaneos(escaneos, estado.pendientes);
-  estado.todos = await almacen.todosLosEscaneos();
-  if (estado.club) estado.escaneos = await almacen.escaneosDeClub(estado.club.id);
-  estado.versionSheets = Number(r.version) || 0;
-  if (Array.isArray(r.eventos) && Array.isArray(r.puntajes)) {
-    estado.eventosHoja = sheets.normalizarEventos(r.eventos);
-    estado.puntajesHoja = sheets.normalizarPuntajes(r.puntajes, estado.eventosHoja);
-    await almacen.guardarAjuste('eventosHoja', estado.eventosHoja);
-    await almacen.guardarAjuste('puntajesHoja', [...estado.puntajesHoja]);
+  if (r.detalleDisponible === false) {
+    return {
+      ok: false,
+      requierePreparacion: true,
+      error: 'Falta la hoja "Detalle de escaneos". No se reemplazó la copia local. ' +
+        'Volvé a preparar la planilla antes de sincronizar.',
+    };
   }
+  return conDatosExclusivos(async () => {
+    const protegidosActuales = sheets.clubesProtegidosParaLectura(
+      estado.pendientes,
+      estado.clubesEnMutacion
+    );
+    const cantidadDetalleLocalNoProtegida = estado.todos
+      .filter(e => e.idClub !== CLUB_PRUEBA && !protegidosActuales.has(e.idClub)).length;
+    if (sheets.detalleRemotoVacioEsSospechoso(
+      cantidadDetalleLocalNoProtegida,
+      r.escaneos
+    )) {
+      return {
+        ok: false,
+        detalleVacio: true,
+        error: 'Google Sheets devolvió Detalle completamente vacío. ' +
+          'Por seguridad no se borró la copia de este teléfono; revisá el historial de la planilla.',
+      };
+    }
 
-  // Las claves vienen como texto QR; el motor trabaja con el id evento-serial.
-  estado.remotos = new Map();
-  for (const [crudo, clubes] of sheets.normalizarSeriales(r.seriales || {})) {
-    const id = idDeSticker(crudo);
-    if (id) estado.remotos.set(id, clubes);
-  }
-  estado.remotosFecha = Date.now();
-  await almacen.guardarAjuste('remotos', [...estado.remotos]);
-  await almacen.guardarAjuste('remotosFecha', estado.remotosFecha);
+    const escaneos = sheets.normalizarEscaneos(r.escaneos);
+    await almacen.reemplazarEscaneos(escaneos, protegidosActuales);
+    estado.todos = await almacen.todosLosEscaneos();
+    if (estado.club) estado.escaneos = await almacen.escaneosDeClub(estado.club.id);
+    estado.versionSheets = Number(r.version) || 0;
+    estado.detalleDisponible = r.detalleDisponible !== false;
+    estado.revisionesDetalle = sheets.combinarRevisionesDetalle(
+      estado.revisionesDetalle,
+      sheets.normalizarRevisionesDetalle(r.revisionesDetalle),
+      protegidosActuales,
+      new Set(escaneos.map(escaneo => escaneo.idClub))
+    );
+    await guardarRevisionesDetalle();
+    if (Array.isArray(r.eventos) && Array.isArray(r.puntajes)) {
+      estado.eventosHoja = sheets.normalizarEventos(r.eventos);
+      estado.puntajesHoja = sheets.normalizarPuntajes(r.puntajes, estado.eventosHoja);
+      await almacen.guardarAjuste('eventosHoja', estado.eventosHoja);
+      await almacen.guardarAjuste('puntajesHoja', [...estado.puntajesHoja]);
+    }
 
-  pintarEstadoRemotos();
-  pintarClubes();
-  if (estado.club) pintarFicha();
-  if (estado.vista === 'resultados') pintarResultados();
-  return { ok: true };
+    // Las claves vienen como texto QR; el motor trabaja con el id evento-serial.
+    estado.remotos = new Map();
+    for (const [crudo, clubes] of sheets.normalizarSeriales(r.seriales || {})) {
+      const id = idDeSticker(crudo);
+      if (id) estado.remotos.set(id, clubes);
+    }
+    estado.remotosFecha = Date.now();
+    await almacen.guardarAjuste('remotos', [...estado.remotos]);
+    await almacen.guardarAjuste('remotosFecha', estado.remotosFecha);
+
+    pintarEstadoRemotos();
+    pintarClubes();
+    if (estado.club) pintarFicha();
+    if (estado.vista === 'resultados') pintarResultados();
+    if (estado.vista === 'ajustes') pintarDiagnostico();
+    return { ok: true };
+  });
 }
 
 async function traerDeSheets(silencioso = false) {
@@ -744,6 +1077,7 @@ async function traerDeSheets(silencioso = false) {
     if (!silencioso) mostrarEstadoSheets('aviso', falta.error);
     return falta;
   }
+  await asegurarUrlRevisionesDetalle(url);
 
   const boton = $('#sheets-traer');
   if (!silencioso) { boton.disabled = true; mostrarEstadoSheets('', 'Consultando la planilla…'); }
@@ -774,14 +1108,16 @@ async function sincronizarAutomaticamente({ forzarEnvio = false } = {}) {
   // Hasta que el evaluador elija Subir o Descartar, ningún temporizador puede
   // publicar silenciosamente la copia local que encontró en este teléfono.
   if (!estado.conectado && !forzarEnvio) return;
-  if (estado.sincronizando || !navigator.onLine) return;
+  if (estado.sincronizando || estado.reconciliando || !navigator.onLine) return;
   const url = $('#sheets-url').value.trim();
   const clave = $('#sheets-clave').value;
   if (!url || !clave) return;
 
+  const versionAlIniciar = estado.versionCambiosPendientes;
   estado.sincronizando = true;
   try {
-    const ids = [...estado.pendientes];
+    const ids = [...estado.pendientes]
+      .filter(idClub => !estado.clubesEnMutacion.has(idClub));
     if (ids.length) {
       const enviada = await enviarClubes(ids, !forzarEnvio);
       if (!enviada.ok && forzarEnvio) mostrarEstadoSheets('alerta', enviada.error || 'No se pudo enviar.');
@@ -789,6 +1125,13 @@ async function sincronizarAutomaticamente({ forzarEnvio = false } = {}) {
     await traerDeSheets(!forzarEnvio);
   } finally {
     estado.sincronizando = false;
+    if (sheets.debeReprogramarSincronizacion(
+      versionAlIniciar,
+      estado.versionCambiosPendientes,
+      estado.pendientes.size
+    )) {
+      programarSincronizacion();
+    }
   }
 }
 
@@ -800,6 +1143,221 @@ async function enviarASheets() {
   await sincronizarAutomaticamente({ forzarEnvio: true });
   boton.disabled = false;
   boton.textContent = 'Sincronizar ahora';
+}
+
+function padronParaSheets() {
+  return CLUBES_OFICIALES.map(({ id, nombre, region }) => ({ id, nombre, region }));
+}
+
+function eventosParaSheets() {
+  return TODOS_LOS_ITEMS.map(({ codigo, nombre, tipo, puntos }) =>
+    ({ codigo, nombre, tipo, puntos })
+  );
+}
+
+async function enviarReparacionesPuntajes(cambios) {
+  const url = $('#sheets-url').value.trim();
+  const clave = $('#sheets-clave').value;
+  if (!url || !clave) return { ok: false, error: 'Falta conectar la aplicación con Google Sheets.' };
+  await asegurarUrlRevisionesDetalle(url);
+  return sheets.enviar(
+    {
+      url,
+      clave,
+      dispositivo: estado.dispositivo || 'control de consistencia',
+      clubes: cambios.map(cambio => cambio.idClub).join(', '),
+    },
+    [],
+    CAMPORI.nombre,
+    {
+      cambios,
+      padron: padronParaSheets(),
+      eventos: eventosParaSheets(),
+    }
+  );
+}
+
+async function reconciliarPuntajesDesdeDetalle() {
+  const boton = $('#sheets-reconciliar');
+  if (estado.sincronizando || estado.reconciliando) {
+    mostrarEstadoSheets('aviso', 'Hay una sincronización en curso. Esperá a que termine y volvé a intentar.');
+    return;
+  }
+  iniciarReconciliacion();
+  const controles = [
+    $('#sheets-reconciliar'),
+    $('#sheets-enviar'),
+    $('#sheets-traer'),
+    $('#sheets-probar'),
+  ].filter(Boolean);
+  controles.forEach(control => { control.disabled = true; });
+  boton.textContent = 'Comparando…';
+  try {
+    await guardarSheets();
+
+    if (estado.clubesEnMutacion.size) {
+      mostrarEstadoSheets('aviso',
+        'Hay un escaneo o una edición local todavía en curso. Esperá a que termine y volvé a comparar.');
+      return;
+    }
+
+    mostrarEstadoSheets('', 'Verificando clubes, columnas y fórmulas del molde…');
+    const preparada = await sheets.preparar(
+      $('#sheets-url').value.trim(),
+      $('#sheets-clave').value,
+      padronParaSheets(),
+      eventosParaSheets()
+    );
+    if (!preparada.ok) {
+      mostrarEstadoSheets('alerta', preparada.error || 'No se pudo verificar el molde de Puntajes.');
+      return;
+    }
+
+    let remota = await traerDeSheets(true);
+    if (!remota?.ok) {
+      mostrarEstadoSheets('alerta', remota?.error || 'No se pudo leer Google Sheets.');
+      return;
+    }
+    if (estado.versionSheets < 3
+        || estado.revisionesDetalle.size < estado.puntajesHoja.size) {
+      mostrarEstadoSheets('alerta',
+        'Este control seguro requiere la API 3. Copiá la versión actual de ' +
+        'herramientas/apps-script.gs y publicá una versión nueva del mismo despliegue.');
+      return;
+    }
+
+    if (estado.pendientes.size) {
+      mostrarEstadoSheets('', 'Primero se están enviando los cambios pendientes…');
+      const enviada = await enviarClubes([...estado.pendientes], true);
+      if (!enviada.ok) {
+        mostrarEstadoSheets('alerta', enviada.error || 'No se pudieron enviar los cambios pendientes.');
+        return;
+      }
+      if (estado.pendientes.size) {
+        mostrarEstadoSheets('alerta',
+          'Todavía hay cambios pendientes o en conflicto. Resolvelos antes de recalcular desde Detalle.');
+        return;
+      }
+      remota = await traerDeSheets(true);
+      if (!remota?.ok) {
+        mostrarEstadoSheets('alerta', remota?.error || 'No se pudo verificar el envío pendiente.');
+        return;
+      }
+    }
+
+    const auditoria = auditarConsistenciaPuntajes();
+    if (auditoria.clubesFaltantes.length || auditoria.eventosFaltantes.length) {
+      mostrarEstadoSheets('alerta',
+        'El molde sigue incompleto después de prepararlo. No se modificó ningún puntaje; ' +
+        'revisá el Apps Script y volvé a intentar.');
+      return;
+    }
+    const cantidadProblemas = cantidadProblemasAuditoria(auditoria);
+    if (!cantidadProblemas) {
+      mostrarEstadoSheets('ok',
+        'Control aprobado: molde, Detalle, celdas de Puntajes y fórmulas TOTAL son consistentes.');
+      pintarAvisoConsistencia();
+      return;
+    }
+
+    const puestasEnCero = auditoria.diferencias
+      .filter(d => d.local === 0 && d.remoto !== 0);
+    if (sheets.detalleVacioEsDestructivo(estado.todos.length, auditoria.diferencias)) {
+      mostrarEstadoSheets('alerta',
+        `Detalle está vacío, pero Puntajes contiene ${puestasEnCero.length} celda(s) con valor. ` +
+        'Por seguridad no se puso nada en cero. Revisá o restaurá Detalle en el historial de Google Sheets.');
+      return;
+    }
+
+    const muestra = auditoria.diferencias.slice(0, 12)
+      .map(d => `${d.idClub} ${d.codigo}: ${d.remoto} → ${d.local}`)
+      .join('\n');
+    const mas = auditoria.diferencias.length > 12
+      ? `\n…y ${auditoria.diferencias.length - 12} diferencia(s) más.`
+      : '';
+    const mensaje =
+      `Se encontraron ${auditoria.celdas} celda(s) diferentes y ` +
+      `${auditoria.totalesIncorrectos.length} TOTAL(es) con valor o fórmula incorrectos.\n` +
+      `${puestasEnCero.length} celda(s) quedarían en 0.\n\n` +
+      `${muestra}${mas}\n\n` +
+      '¿Reemplazar esas celdas con el puntaje calculado desde los QR de Detalle? ' +
+      'Esto puede revertir correcciones manuales hechas directamente en Puntajes.';
+    if (!confirm(mensaje)) {
+      mostrarEstadoSheets('aviso', 'Comparación terminada sin modificar Google Sheets.');
+      return;
+    }
+    if (puestasEnCero.length) {
+      const clubes = new Set(puestasEnCero.map(d => d.idClub)).size;
+      if (!confirm(
+        `Confirmación de seguridad: ${puestasEnCero.length} celda(s) de ${clubes} club(es) ` +
+        'pasarán a 0 porque no tienen respaldo válido en Detalle.\n\n¿Aplicar también esas reducciones?'
+      )) {
+        mostrarEstadoSheets('aviso', 'Comparación terminada sin aplicar las reducciones a cero.');
+        return;
+      }
+    }
+
+    const porClub = new Map();
+    for (const diferencia of auditoria.diferencias) {
+      if (!porClub.has(diferencia.idClub)) {
+        porClub.set(diferencia.idClub, { eventos: {}, anteriores: {} });
+      }
+      const cambio = porClub.get(diferencia.idClub);
+      cambio.eventos[diferencia.codigo] = diferencia.local;
+      cambio.anteriores[diferencia.codigo] = diferencia.remoto;
+    }
+    // Un parche de cualquier celda válida vuelve a instalar la fórmula TOTAL de la fila.
+    const codigoFormula = estado.eventosHoja[0]?.codigo || TODOS_LOS_ITEMS[0]?.codigo;
+    for (const total of auditoria.totalesIncorrectos) {
+      if (!codigoFormula) continue;
+      if (!porClub.has(total.idClub)) {
+        porClub.set(total.idClub, { eventos: {}, anteriores: {} });
+      }
+      const cambio = porClub.get(total.idClub);
+      if (!(codigoFormula in cambio.eventos)) {
+        const valor = Number(estado.puntajesHoja.get(total.idClub)?.eventos?.[codigoFormula]) || 0;
+        cambio.eventos[codigoFormula] = valor;
+        cambio.anteriores[codigoFormula] = valor;
+      }
+    }
+
+    const cambios = [];
+    for (const [idClub, cambio] of porClub) {
+      const revisionDetalle = estado.revisionesDetalle.get(idClub);
+      if (!revisionDetalle) {
+        mostrarEstadoSheets('alerta',
+          `No se recibió la huella de Detalle para ${idClub}. No se modificó ningún puntaje.`);
+        return;
+      }
+      cambios.push({ idClub, ...cambio, revisionDetalle });
+    }
+    // Es un parche inmutable separado de la cola normal: nunca confirma ni borra
+    // un QR que haya llegado mientras se realizaba la comparación.
+    const reparada = await enviarReparacionesPuntajes(cambios);
+    remota = await traerDeSheets(true);
+    if (!remota?.ok) {
+      mostrarEstadoSheets('alerta', remota?.error || 'No se pudo verificar la reparación.');
+      return;
+    }
+
+    const final = auditarConsistenciaPuntajes();
+    if (reparada.ok && !estado.pendientes.size && !cantidadProblemasAuditoria(final)) {
+      mostrarEstadoSheets('ok',
+        'Reparación verificada: molde, Detalle, Puntajes y fórmulas TOTAL ya coinciden.');
+    } else {
+      const conflictos = Array.isArray(reparada.conflictos) ? reparada.conflictos.length : 0;
+      mostrarEstadoSheets('alerta',
+        `Quedaron diferencias o ${conflictos} conflicto(s). Los cambios posteriores ` +
+        'de Detalle se conservaron y no fueron sobrescritos; volvé a comparar.');
+    }
+    pintarAvisoConsistencia();
+    pintarDiagnostico();
+  } finally {
+    terminarReconciliacion();
+    if (estado.pendientes.size) programarSincronizacion();
+    controles.forEach(control => { control.disabled = false; });
+    boton.textContent = 'Comparar y recalcular desde Detalle';
+  }
 }
 
 function pintarEstadoRemotos() {
@@ -878,6 +1436,7 @@ async function descartarCacheYAplicar(remota) {
   await almacen.borrarTodo();
   estado.pendientes.clear();
   estado.eventosPendientes.clear();
+  estado.revisionesPendientes.clear();
   await guardarPendientes();
   estado.todos = [];
   estado.fichas = new Map();
@@ -910,6 +1469,7 @@ async function conectarInicial() {
   $('#sheets-clave').value = clave;
   $('#nombre-dispositivo').value = dispositivo;
   estado.dispositivo = dispositivo;
+  await asegurarUrlRevisionesDetalle(url);
   await almacen.guardarAjuste('sheetsUrl', url);
   await almacen.guardarAjuste('sheetsClave', clave);
   await almacen.guardarAjuste('dispositivo', dispositivo);
@@ -918,11 +1478,26 @@ async function conectarInicial() {
   // los enviamos una vez. Después, Google Sheets queda como fuente central.
   const preparada = await almacen.leerAjuste('sincronizacionBidireccional', false);
   if (!preparada) {
-    estado.todos.forEach(e => estado.pendientes.add(e.idClub));
+    for (const idClub of new Set(estado.todos.map(e => e.idClub))) {
+      if (!idClub || idClub === CLUB_PRUEBA) continue;
+      registrarCambioPendiente(idClub);
+      estado.pendientes.add(idClub);
+    }
     await guardarPendientes();
   }
 
   let remota = await traerDeSheets(true);
+  if (!remota?.ok && remota?.requierePreparacion) {
+    mostrarEstadoConexion('', 'Creando el molde inicial de Google Sheets…');
+    const inicializada = await sheets.preparar(
+      url,
+      clave,
+      padronParaSheets(),
+      eventosParaSheets()
+    );
+    if (inicializada.ok) remota = await traerDeSheets(true);
+    else remota = inicializada;
+  }
   if (!remota?.ok) {
     boton.disabled = false;
     boton.textContent = 'Conectar y sincronizar';
@@ -930,15 +1505,15 @@ async function conectarInicial() {
     return;
   }
 
-  // La API v2 puede preparar sola la matriz vacía/legada. Después de este paso,
-  // las columnas de eventos se descubren siempre leyendo el encabezado de Sheets.
-  if (estado.versionSheets >= 2 && !estado.eventosHoja.length) {
+  // El Apps Script puede crear o migrar el molde sin perder valores existentes.
+  // También repara columnas o clubes agregados después de la primera instalación.
+  if (estado.versionSheets >= 2 && matrizNecesitaPreparacion()) {
     mostrarEstadoConexion('', 'Preparando clubes y columnas de eventos en Google Sheets…');
     const preparadaHoja = await sheets.preparar(
       url,
       clave,
-      CLUBES_OFICIALES.map(({ id, nombre, region }) => ({ id, nombre, region })),
-      TODOS_LOS_ITEMS.map(({ codigo, nombre, tipo, puntos }) => ({ codigo, nombre, tipo, puntos }))
+      padronParaSheets(),
+      eventosParaSheets()
     );
     if (!preparadaHoja.ok) {
       boton.disabled = false;
@@ -1008,6 +1583,9 @@ async function conectarInicial() {
 async function pintarDiagnostico() {
   const seguro = window.isSecureContext;
   const todos = resultadosDeTodos();
+  const auditoria = auditarConsistenciaPuntajes();
+  const variosEvaluadores = clubesConVariosEvaluadores();
+  const problemasPuntaje = cantidadProblemasAuditoria(auditoria);
   const lineas = [
     ['✅', 'Lectura de QR con la cámara',
       `Lector ${VERSION_LECTOR} · ${await Escaner.descripcionMotor()}`],
@@ -1020,6 +1598,18 @@ async function pintarDiagnostico() {
         : 'Sin traer. No se detectan stickers prestados entre clubes de otros evaluadores.'],
     [estado.conectado ? '✅' : '⚠️', 'Google Sheets',
       estado.conectado ? 'Conectado · actualización automática cada 20 segundos' : 'Sin conexión automática'],
+    [!auditoria.disponible ? '➖' : problemasPuntaje ? '⚠️' : '✅',
+      'Detalle ↔ Puntajes ↔ TOTAL',
+      !auditoria.disponible
+        ? 'Disponible después de conectar Google Sheets'
+        : problemasPuntaje
+          ? `${auditoria.celdas} celdas, ${auditoria.totalesIncorrectos.length} totales, ` +
+            `${auditoria.clubesFaltantes.length} clubes y ${auditoria.eventosFaltantes.length} columnas por revisar`
+          : 'Consistentes'],
+    [variosEvaluadores.length ? '⚠️' : '✅', 'Un evaluador por club',
+      variosEvaluadores.length
+        ? `${variosEvaluadores.length} club(es) tienen escaneos con más de un nombre de evaluador`
+        : 'Sin clubes compartidos entre teléfonos identificados'],
     ['🔢', 'Escaneos guardados', String(estado.todos.length)],
     ['🏁', 'Fichas terminadas', String(todos.filter(t => t.ficha?.cerrada).length)],
     ['🔑', 'Prefijo de los QR', CAMPORI.prefijo],
@@ -1043,6 +1633,12 @@ async function iniciar() {
   const urlVigente = sheets.migrarUrlPredeterminada(urlGuardada);
   $('#sheets-url').value = urlVigente;
   if (urlVigente !== urlGuardada) await almacen.guardarAjuste('sheetsUrl', urlVigente);
+  const revisionesGuardadas = await almacen.leerAjuste('revisionesDetalle', null);
+  estado.revisionesDetalle = sheets.restaurarRevisionesDetalle(
+    revisionesGuardadas,
+    urlVigente
+  );
+  estado.urlRevisionesDetalle = urlVigente;
   $('#sheets-clave').value = await almacen.leerAjuste('sheetsClave', '') || '';
   $('#conexion-url').value = $('#sheets-url').value;
   $('#conexion-clave').value = $('#sheets-clave').value;
@@ -1069,7 +1665,7 @@ async function iniciar() {
     [...new Set(CLUBES_OFICIALES.map(c => c.region))].filter(Boolean)
       .map(r => `<option>${escapar(r)}</option>`).join('');
 
-  $('#m-fisicos .valor').textContent = `0/${REGLAS.fisicosQueCuentan}`;
+  $('#m-fisicos .valor').textContent = `0/${CANTIDAD_EVENTOS_FISICOS}`;
   $('#m-espirituales .valor').textContent = `0/${REGLAS.espiritualesObligatorios}`;
 
   pintarEstadoRemotos();
@@ -1118,31 +1714,38 @@ $('#linterna').addEventListener('click', async () => {
 });
 $('#manual').addEventListener('click', () => {
   const texto = prompt('Escribí el código tal como figura debajo del QR, por ejemplo AV5-F03-200-0147-K7M2:');
-  if (texto) procesarCodigo(texto.trim());
+  if (texto) encolarCodigo(texto.trim());
 });
 
 // --- ficha
 $('#cerrar-ficha').addEventListener('click', async () => {
-  const ficha = estado.fichas.get(estado.club.id);
-  await almacen.marcarFicha(estado.club.id, { cerrada: !ficha?.cerrada });
-  await marcarPendiente(estado.club.id, []);
-  estado.fichas = await almacen.fichas();
-  pintarFicha();
-  const ahoraCerrada = estado.fichas.get(estado.club.id)?.cerrada;
-  avisar(ahoraCerrada ? 'ok' : 'info', ahoraCerrada ? '🏁' : '📋',
-    ahoraCerrada ? 'Ficha terminada' : 'Ficha reabierta',
-    ahoraCerrada ? 'Podés pasar al siguiente club.' : 'Podés seguir escaneando.');
+  const idClub = estado.club.id;
+  await duranteMutacionClub(idClub, async () => {
+    const ficha = estado.fichas.get(idClub);
+    await almacen.marcarFicha(idClub, { cerrada: !ficha?.cerrada });
+    await marcarPendiente(idClub, []);
+    estado.fichas = await almacen.fichas();
+    if (estado.club?.id === idClub) pintarFicha();
+    const ahoraCerrada = estado.fichas.get(idClub)?.cerrada;
+    avisar(ahoraCerrada ? 'ok' : 'info', ahoraCerrada ? '🏁' : '📋',
+      ahoraCerrada ? 'Ficha terminada' : 'Ficha reabierta',
+      ahoraCerrada ? 'Podés pasar al siguiente club.' : 'Podés seguir escaneando.');
+  });
 });
 $('#borrar-ficha').addEventListener('click', async () => {
   if (!confirm(`¿Borrar TODOS los escaneos de ${estado.club.nombre}? No se puede deshacer.`)) return;
-  const antes = resultadoLocal(estado.club.id, estado.escaneos);
-  await almacen.borrarClub(estado.club.id);
-  estado.fichas = await almacen.fichas();
-  await recargarEscaneos();
-  const despues = resultadoLocal(estado.club.id, estado.escaneos);
-  await marcarPendiente(estado.club.id, codigosQueCambiaron(antes, despues));
-  pintarFicha();
-  avisar('info', '🗑️', 'Ficha vaciada', 'Podés empezar de nuevo.');
+  const idClub = estado.club.id;
+  await duranteMutacionClub(idClub, async () => {
+    const escaneosAntes = await almacen.escaneosDeClub(idClub);
+    const antes = resultadoLocal(idClub, escaneosAntes);
+    await almacen.borrarClub(idClub);
+    estado.fichas = await almacen.fichas();
+    const escaneosDespues = await recargarEscaneosDeClub(idClub);
+    const despues = resultadoLocal(idClub, escaneosDespues);
+    await marcarPendiente(idClub, codigosQueCambiaron(antes, despues));
+    if (estado.club?.id === idClub) pintarFicha();
+    avisar('info', '🗑️', 'Ficha vaciada', 'Podés empezar de nuevo.');
+  });
 });
 
 // --- exportacion
@@ -1171,6 +1774,7 @@ $('#sheets-guardar').addEventListener('click', guardarSheets);
 $('#sheets-probar').addEventListener('click', probarSheets);
 $('#sheets-enviar').addEventListener('click', enviarASheets);
 $('#sheets-traer').addEventListener('click', () => traerDeSheets(false));
+$('#sheets-reconciliar').addEventListener('click', reconciliarPuntajesDesdeDetalle);
 $('#conexion-conectar').addEventListener('click', conectarInicial);
 $('#conexion-cache-subir').addEventListener('click', () => responderDecisionCache('subir'));
 $('#conexion-cache-descartar').addEventListener('click', () => responderDecisionCache('descartar'));
@@ -1184,15 +1788,22 @@ $('#conexion-omitir').addEventListener('click', () => {
 $('#borrar-todo').addEventListener('click', async () => {
   if (!confirm('¿Borrar TODOS los datos de TODOS los clubes de este teléfono?')) return;
   if (!confirm('Esto no se puede deshacer. ¿Seguro?')) return;
+  await esperarFinReconciliacion();
   const idsConDatos = [...new Set(estado.todos.map(e => e.idClub))];
-  await almacen.borrarTodo();
-  estado.todos = []; estado.fichas = new Map(); estado.escaneos = [];
-  for (const id of idsConDatos) {
-    if (id === CLUB_PRUEBA) continue;
-    estado.pendientes.add(id);
-    estado.eventosPendientes.set(id, new Set(TODOS_LOS_ITEMS.map(e => e.codigo)));
+  idsConDatos.forEach(iniciarMutacionClub);
+  try {
+    await conDatosExclusivos(async () => {
+      await almacen.borrarTodo();
+      estado.todos = []; estado.fichas = new Map(); estado.escaneos = [];
+      for (const id of idsConDatos) {
+        if (id === CLUB_PRUEBA) continue;
+        agregarPendienteEnMemoria(id, TODOS_LOS_ITEMS.map(e => e.codigo));
+      }
+      await guardarPendientes();
+    });
+  } finally {
+    idsConDatos.forEach(terminarMutacionClub);
   }
-  await guardarPendientes();
   programarSincronizacion();
   pintarClubes(); pintarDiagnostico();
   alert('Listo, no quedan datos.');

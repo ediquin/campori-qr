@@ -91,14 +91,14 @@ grupo('Club que hace todo bien');
 
 {
   const escaneos = [
-    ...['F01', 'F02', 'F03', 'F04', 'F05', 'F06', 'F07', 'F08'].map(c => sticker(c)),
+    ...EVENTOS_FISICOS.map(e => sticker(e.codigo)),
     ...['E01', 'E02', 'E03', 'E04', 'E05', 'E06', 'E07'].map(c => sticker(c)),
   ];
   const r = calcular(escaneos);
-  comprobar('8 fisicos suman 1600', r.fisico.puntos, 1600);
+  comprobar('los 14 fisicos suman 2800', r.fisico.puntos, 2800);
   comprobar('7 espirituales suman 1400', r.espiritual.puntos, 1400);
   comprobar('el total es el tope base', r.total, TOPE_BASE);
-  comprobar('el total base es 3000', r.total, 3000);
+  comprobar('el total base es 4200', r.total, 4200);
   comprobar('queda marcado como completo', r.completo, true);
   comprobar('sin alertas', r.alertas.length, 0);
 }
@@ -125,32 +125,55 @@ grupo('Modo operativo sin inventario');
     calcular([uno, { ...uno }]).detalle[1].estado, 'serial_repetido');
 }
 
-grupo('Regla de los 8 eventos fisicos');
+grupo('Todos los eventos fisicos distintos suman');
 
 {
-  // Pegan 10 fisicos: valen los 8 primeros escaneados, no los 8 "mejores"
-  // (no hay mejores: todos valen igual).
+  // La antigua barrera estaba exactamente aqui: F09 y F10 quedaban en cero.
   const escaneos = ['F01', 'F02', 'F03', 'F04', 'F05', 'F06', 'F07', 'F08', 'F09', 'F10'].map(c => sticker(c));
   const r = calcular(escaneos);
-  comprobar('el tope se respeta', r.fisico.puntos, 1600);
-  comprobar('cuenta 8 eventos', r.fisico.hechos, 8);
-  comprobar('reporta 2 excedentes', r.fisico.excedentes, 2);
-  comprobar('los descartados son los 2 ultimos escaneados',
-    r.detalle.filter(d => d.estado === 'excedente').map(d => d.evento.codigo), ['F09', 'F10']);
-  comprobar('avisa del exceso',
-    r.alertas.some(a => a.texto.includes('10 eventos físicos')), true);
+  comprobar('diez fisicos suman 2000', r.fisico.puntos, 2000);
+  comprobar('cuenta los diez eventos', r.fisico.hechos, 10);
+  comprobar('F09 y F10 quedan contados',
+    r.detalle.slice(-2).map(d => [d.evento.codigo, d.estado, d.puntos]),
+    [['F09', 'contado', 200], ['F10', 'contado', 200]]);
+  comprobar('superar ocho no genera alertas', r.alertas.length, 1);
+  comprobar('el unico aviso es por los espirituales faltantes',
+    r.alertas[0].texto.includes('eventos espirituales'), true);
 }
 
 {
-  // Un evento repetido no debe gastar uno de los 8 cupos.
+  const todos = EVENTOS_FISICOS.map(e => sticker(e.codigo));
+  const derecho = calcular(todos);
+  const inverso = calcular([...todos].reverse());
+  comprobar('los 14 fisicos distintos suman 2800', derecho.fisico.puntos, 2800);
+  comprobar('el orden ya no cambia el puntaje fisico',
+    inverso.fisico.puntos, derecho.fisico.puntos);
+  comprobar('el maximo fisico natural es el catalogo completo',
+    [derecho.fisico.hechos, derecho.fisico.cupo, derecho.fisico.tope], [14, 14, 2800]);
+}
+
+{
+  // Un evento repetido sigue sin sumar, aunque ya no exista un cupo de ocho.
   const escaneos = [
     sticker('F01'), sticker('F01'),  // el segundo es repetido, con OTRO serial
-    ...['F02', 'F03', 'F04', 'F05', 'F06', 'F07', 'F08'].map(c => sticker(c)),
+    ...EVENTOS_FISICOS.slice(1).map(e => sticker(e.codigo)),
   ];
   const r = calcular(escaneos);
-  comprobar('el repetido no ocupa cupo: llega a 8 eventos', r.fisico.hechos, 8);
-  comprobar('el repetido no suma puntos', r.fisico.puntos, 1600);
+  comprobar('el repetido no impide contar los otros 13', r.fisico.hechos, 14);
+  comprobar('el repetido no suma puntos', r.fisico.puntos, 2800);
   comprobar('marca el repetido', r.detalle.filter(d => d.estado === 'repetido').length, 1);
+}
+
+{
+  const espirituales = EVENTOS_ESPIRITUALES.map(e => sticker(e.codigo));
+  const conFisicos = cantidad => calcular([
+    ...EVENTOS_FISICOS.slice(0, cantidad).map(e => sticker(e.codigo)),
+    ...espirituales,
+  ]);
+  comprobar('siete fisicos no alcanzan la meta de completitud', conFisicos(7).completo, false);
+  comprobar('ocho fisicos alcanzan la meta de completitud', conFisicos(8).completo, true);
+  comprobar('nueve fisicos siguen completos y continúan sumando',
+    [conFisicos(9).completo, conFisicos(9).total], [true, 3200]);
 }
 
 grupo('Deteccion de trampas');
@@ -227,11 +250,66 @@ grupo('Puntaje adicional');
   comprobar('Plaza/Seguridad/Limpieza valen 200',
     [porCod.A31.puntos, porCod.A32.puntos, porCod.A33.puntos], [200, 200, 200]);
   comprobar('Puntos extra (A36) vale 50', porCod.A36.puntos, 50);
+  comprobar('Puntos extra (A36) está marcado como repetible', porCod.A36.repetible, true);
+  comprobar('A36 es el único adicional repetible',
+    CRITERIOS_ADICIONALES.filter(e => e.repetible).map(e => e.codigo), ['A36']);
 
   // Un adicional de 500 lee su puntaje del catalogo, no el fijo de 200.
   comprobar('Botiquin y Personal (A30) suma 500', calcular([sticker('A30')]).adicional.puntos, 500);
   comprobar('Plaza (A31) suma 200', calcular([sticker('A31')]).adicional.puntos, 200);
   comprobar('Puntos extra (A36) suma 50', calcular([sticker('A36')]).adicional.puntos, 50);
+}
+
+{
+  // Puntos extra es la única excepción entre los adicionales: cada sticker distinto
+  // representa otra asignación de 50 puntos para el mismo club.
+  const r = calcular([
+    sticker('A36', 50, 8101),
+    sticker('A36', 50, 8102),
+    sticker('A36', 50, 8103),
+  ]);
+  comprobar('tres stickers distintos de Puntos extra suman 150', r.adicional.puntos, 150);
+  comprobar('los tres Puntos extra quedan contados',
+    r.detalle.map(d => d.estado), ['contado', 'contado', 'contado']);
+}
+
+{
+  // La excepción no debilita el control de duplicados: una foto/copia del mismo QR
+  // sigue contando una sola vez.
+  const puntosExtra = sticker('A36', 50, 8201);
+  const r = calcular([puntosExtra, { ...puntosExtra }]);
+  comprobar('el mismo sticker de Puntos extra suma una sola vez', r.adicional.puntos, 50);
+  comprobar('el Puntos extra duplicado queda marcado por serial',
+    r.detalle[1].estado, 'serial_repetido');
+}
+
+{
+  const extras = [
+    sticker('A36', 50, 8301),
+    sticker('A36', 50, 8302),
+    sticker('A36', 50, 8303),
+  ];
+  const ajeno = sticker('A36', 50, 8304);
+  const resultado = calcular([
+    ...EVENTOS_FISICOS.map(e => sticker(e.codigo)),
+    ...EVENTOS_ESPIRITUALES.map(e => sticker(e.codigo)),
+    ...extras,
+    { ...extras[0] },
+    ajeno,
+    sticker('S02'),
+  ], {
+    usadosPorOtros: new Map([[leerQr(ajeno.crudo).id, 'C053']]),
+  });
+  comprobar('caso transversal mantiene A36=150 y total 3850',
+    [resultado.fisico.puntos, resultado.espiritual.puntos,
+      resultado.adicional.puntos, resultado.sancion.puntos, resultado.total],
+    [2800, 1400, 150, -500, 3850]);
+  comprobar('el caso transversal conserva duplicado y A36 ajeno en cero',
+    resultado.detalle
+      .filter(d => d.evento?.codigo === 'A36')
+      .map(d => [d.estado, d.puntos]),
+    [['contado', 50], ['contado', 50], ['contado', 50],
+      ['serial_repetido', 0], ['serial_ajeno', 0]]);
 }
 
 grupo('Rúbrica de Botiquín: mutuamente excluyente');

@@ -14,7 +14,14 @@
 import {
   URL_PREDETERMINADA, migrarUrlPredeterminada,
   normalizarSeriales, normalizarEscaneos, normalizarEventos, normalizarPuntajes,
-  conflictosRemotosParaClub,
+  conflictosRemotosParaClub, capturarRevisionesPendientes,
+  confirmarPendientesAplicados, debeReprogramarSincronizacion,
+  totalDesdeEventos, diferenciasDePuntajes, clubesProtegidosParaLectura,
+  normalizarRevisionesDetalle, combinarRevisionesDetalle,
+  serializarRevisionesDetalle, restaurarRevisionesDetalle,
+  aplicarRevisionesConfirmadas,
+  aplicarConflictosDeSerial, puntajesDesdeDetalle,
+  detalleVacioEsDestructivo, detalleRemotoVacioEsSospechoso,
 } from '../js/sheets.js';
 
 let pasadas = 0;
@@ -199,13 +206,25 @@ grupo('Matriz de puntajes por evento');
     eventos.map(e => e.codigo), ['F01', 'E01']);
 
   const puntajes = normalizarPuntajes([
-    { idClub: 'C001', eventos: { F01: 200, E01: '', A99: 500 }, total: 200, revision: 3 },
+    {
+      idClub: 'C001',
+      eventos: { F01: 200, E01: '', A99: 500 },
+      total: 200,
+      totalConFormula: true,
+      revision: 3,
+    },
     { idClub: '', eventos: { F01: 999 } },
   ], eventos);
   comprobar('cero es el valor por defecto de una celda de evento',
     puntajes.get('C001').eventos, { F01: 200, E01: 0 });
   comprobar('conserva revisión y total de la fila',
-    [puntajes.get('C001').total, puntajes.get('C001').revision], [200, 3]);
+    [puntajes.get('C001').total, puntajes.get('C001').totalConFormula,
+      puntajes.get('C001').revision],
+    [200, true, 3]);
+
+  comprobar('normaliza las huellas de Detalle por club',
+    [...normalizarRevisionesDetalle({ ' C001 ': ' 8-abcd ', '': 'x', C002: '' })],
+    [['C001', '8-abcd']]);
 }
 
 /**
@@ -258,6 +277,7 @@ function aplicarParches(matriz, cambios) {
   const anteriorV2 = 'https://script.google.com/macros/s/AKfycbyOMhY3Fr-UEjJJVQ66UStBJa4ieeOhBnKfJYFD2hsuud9TvF7w1zu4PYs0o1LWyIuM/exec';
   const anteriorReciente = 'https://script.google.com/macros/s/AKfycby2PyREewpwwiTkPXoceYlAUsH2pzDYbMMtZ3c6EVP0Oc_eE-7-otfUdoeSlgGLVCb0/exec';
   const anteriorInicial = 'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec';
+  const anteriorApi3 = 'https://script.google.com/macros/s/AKfycbzNc5k6vQBXXjlnaWsu7Mjdu9QlW7z3oDsXLZUUA3cccYXjbAL_ZIZs17MDm5KBkWEA/exec';
   const personalizada = 'https://script.google.com/macros/s/personalizada/exec';
   comprobar('los telefonos nuevos reciben la URL vigente',
     migrarUrlPredeterminada(''), URL_PREDETERMINADA);
@@ -267,6 +287,8 @@ function aplicarParches(matriz, cambios) {
     migrarUrlPredeterminada(anteriorReciente), URL_PREDETERMINADA);
   comprobar('la primera implementacion oficial tambien se migra',
     migrarUrlPredeterminada(anteriorInicial), URL_PREDETERMINADA);
+  comprobar('la implementacion API 3 anterior se migra al endpoint vigente',
+    migrarUrlPredeterminada(anteriorApi3), URL_PREDETERMINADA);
   comprobar('una URL personalizada se conserva',
     migrarUrlPredeterminada(personalizada), personalizada);
 }
@@ -283,6 +305,230 @@ function aplicarParches(matriz, cambios) {
     escaneos.map(e => e.idClub), ['C002', 'C001']);
   comprobar('normaliza el texto QR recibido',
     escaneos[1].crudo, 'F01-AAAAAAAA');
+}
+
+grupo('Un QR escaneado durante un envío no se pierde');
+
+{
+  const pendientes = new Set(['C024', 'C030']);
+  const eventosPendientes = new Map([
+    ['C024', new Set(['F01'])],
+    ['C030', new Set(['F04'])],
+  ]);
+  const revisiones = new Map([['C024', 1], ['C030', 1]]);
+  const enviadas = capturarRevisionesPendientes(revisiones, pendientes);
+
+  // El POST sigue viajando cuando Central escanea F02.
+  revisiones.set('C024', 2);
+  eventosPendientes.get('C024').add('F02');
+
+  const primera = confirmarPendientesAplicados(
+    ['C024', 'C030'], enviadas, revisiones, pendientes, eventosPendientes
+  );
+  comprobar('el club que cambió durante el POST queda pendiente',
+    primera, { confirmados: ['C030'], conservados: ['C024'] });
+  comprobar('conserva tanto la celda enviada como la celda recién escaneada',
+    [...eventosPendientes.get('C024')], ['F01', 'F02']);
+  comprobar('el otro club sí sale de la cola',
+    [...pendientes], ['C024']);
+
+  const segundoEnvio = capturarRevisionesPendientes(revisiones, pendientes);
+  confirmarPendientesAplicados(
+    ['C024'], segundoEnvio, revisiones, pendientes, eventosPendientes
+  );
+  comprobar('el reenvío estable confirma y limpia Central',
+    [pendientes.size, eventosPendientes.size, revisiones.size], [0, 0, 0]);
+}
+
+{
+  const pendientes = new Set(['C024']);
+  const eventosPendientes = new Map([['C024', new Set()]]);
+  const revisiones = new Map([['C024', 4]]);
+  const enviadas = capturarRevisionesPendientes(revisiones, pendientes);
+
+  // Quitar un escaneo puede modificar solamente el detalle, aunque la celda
+  // agregada conserve el mismo valor; también debe sobrevivir a la carrera.
+  revisiones.set('C024', 5);
+  const resultado = confirmarPendientesAplicados(
+    ['C024'], enviadas, revisiones, pendientes, eventosPendientes
+  );
+  comprobar('un cambio solo de detalle también permanece en cola',
+    [resultado.conservados, pendientes.size], [['C024'], 1]);
+
+  comprobar('se reprograma si apareció un cambio nuevo',
+    debeReprogramarSincronizacion(4, 5, pendientes.size), true);
+  comprobar('no crea un ciclo si no hubo cambios nuevos',
+    debeReprogramarSincronizacion(5, 5, pendientes.size), false);
+  comprobar('no reprograma una cola ya vacía',
+    debeReprogramarSincronizacion(4, 5, 0), false);
+}
+
+grupo('Invariantes entre Detalle, matriz y TOTAL');
+
+{
+  const local = {
+    F01: 200, F02: 200, F03: 200, F04: 200,
+    F05: 200, F06: 200, F07: 200, F08: 200,
+  };
+  const remoto = {
+    F01: 200, F02: 0, F03: 0, F04: 200,
+    F05: 0, F06: 200, F07: 200, F08: 200,
+  };
+  const diferencias = diferenciasDePuntajes(local, remoto, Object.keys(local));
+  comprobar('reproduce las tres celdas perdidas del caso Central',
+    diferencias.map(d => [d.codigo, d.remoto, d.local]),
+    [['F02', 0, 200], ['F03', 0, 200], ['F05', 0, 200]]);
+  comprobar('el detalle de ocho físicos exige 1600',
+    totalDesdeEventos(local), 1600);
+  comprobar('la matriz incompleta explica el total incorrecto de 1000',
+    totalDesdeEventos(remoto), 1000);
+  comprobar('Detalle vacío bloquea una puesta a cero masiva',
+    detalleVacioEsDestructivo(0, [{ codigo: 'F01', local: 0, remoto: 200 }]), true);
+  comprobar('Detalle con evidencia permite revisar la misma diferencia',
+    detalleVacioEsDestructivo(8, [{ codigo: 'F01', local: 0, remoto: 200 }]), false);
+  comprobar('un GET vacío no borra una copia local aunque la matriz también esté en cero',
+    detalleRemotoVacioEsSospechoso(
+      8,
+      []
+    ), true);
+  comprobar('un GET vacío sí es válido si todos los datos locales están protegidos',
+    detalleRemotoVacioEsSospechoso(
+      0,
+      []
+    ), false);
+
+  const primeraMatriz = aplicarParches(
+    { C024: Object.fromEntries(Object.keys(local).map(codigo => [codigo, 0])) },
+    [{
+      idClub: 'C024',
+      eventos: { F01: 200, F04: 200, F06: 200, F07: 200, F08: 200 },
+      anteriores: { F01: 0, F04: 0, F06: 0, F07: 0, F08: 0 },
+    }]
+  ).matriz;
+  const segundoEnvio = {
+    idClub: 'C024',
+    eventos: { ...local },
+    anteriores: { ...primeraMatriz.C024 },
+  };
+  const reparada = aplicarParches(primeraMatriz, [segundoEnvio]);
+  comprobar('el reenvío posterior termina con las ocho celdas y 1600',
+    [
+      reparada.conflictos.length,
+      Object.values(reparada.matriz.C024).filter(v => v === 200).length,
+      totalDesdeEventos(reparada.matriz.C024),
+    ],
+    [0, 8, 1600]);
+}
+
+{
+  const fisicos = Object.fromEntries(
+    Array.from({ length: 14 }, (_, i) => [`F${String(i + 1).padStart(2, '0')}`, 200])
+  );
+  comprobar('las catorce columnas físicas producen 2800',
+    totalDesdeEventos(fisicos), 2800);
+  comprobar('tres Puntos extra se comparan como 150, no como 50',
+    diferenciasDePuntajes({ A36: 150 }, { A36: 50 }, ['A36']),
+    [{ codigo: 'A36', local: 150, remoto: 50 }]);
+  comprobar('el TOTAL conserva el piso en cero ante sanciones',
+    totalDesdeEventos({ F01: 200, S01: -2000 }), 0);
+}
+
+{
+  const protegidos = clubesProtegidosParaLectura(
+    new Set(['C001']),
+    new Map([['C024', 1], ['C030', 2]])
+  );
+  comprobar('un GET preserva pendientes y escrituras locales todavía en curso',
+    [...protegidos], ['C001', 'C024', 'C030']);
+
+  const revisiones = combinarRevisionesDetalle(
+    new Map([['C001', '0-base'], ['C024', '1-base']]),
+    new Map([['C001', '1-remota'], ['C024', '2-remota'], ['C030', '1-remota']]),
+    protegidos,
+    new Set(['C001', 'C024', 'C030'])
+  );
+  comprobar('un GET no adelanta ni inventa la huella de un club pendiente',
+    [...revisiones],
+    [['C001', '0-base'], ['C024', '1-base']]);
+  comprobar('una caché sin base solo adopta revisión si el club remoto está vacío',
+    [
+      ...combinarRevisionesDetalle(
+        new Map(),
+        new Map([['C030', '0-vacia']]),
+        new Set(['C030']),
+        new Set()
+      ),
+    ],
+    [['C030', '0-vacia']]);
+
+  const url = 'https://script.google.com/macros/s/seguro/exec';
+  const guardadas = serializarRevisionesDetalle(
+    url,
+    new Map([['C001', '0-base']])
+  );
+  const restauradas = restaurarRevisionesDetalle(guardadas, url);
+  const despuesDeRecargar = combinarRevisionesDetalle(
+    restauradas,
+    new Map([['C001', '1-ajena']]),
+    new Set(['C001']),
+    new Set(['C001'])
+  );
+  comprobar('una recarga conserva la huella base del club pendiente',
+    [...despuesDeRecargar], [['C001', '0-base']]);
+  comprobar('las huellas de otra planilla nunca se reutilizan',
+    [...restaurarRevisionesDetalle(guardadas, `${url}-otra`)], []);
+
+  const despuesDelPostPropio = aplicarRevisionesConfirmadas(
+    despuesDeRecargar,
+    new Map([['C001', '1-propia']]),
+    ['C001']
+  );
+  const getConCambioPosterior = combinarRevisionesDetalle(
+    despuesDelPostPropio,
+    new Map([['C001', '2-ajena']]),
+    new Set(['C001']),
+    new Set(['C001'])
+  );
+  comprobar('un POST confirmado avanza la base aun si entró otro QR local',
+    [...getConCambioPosterior], [['C001', '1-propia']]);
+}
+
+{
+  const visibles = aplicarConflictosDeSerial(
+    { F01: 200, A36: 200 },
+    { F01: 0, A36: 150 },
+    [
+      { estado: 'serial_ajeno', evento: { codigo: 'F01' } },
+      { estado: 'contado', evento: { codigo: 'A36' } },
+      { estado: 'serial_ajeno', evento: { codigo: 'A36' } },
+    ]
+  );
+  comprobar('un serial ajeno deja de sumar en la vista aunque la matriz esté pendiente',
+    visibles, { F01: 0, A36: 150 });
+}
+
+{
+  const codigos = [
+    ...Array.from({ length: 14 }, (_, i) => `F${String(i + 1).padStart(2, '0')}`),
+    ...Array.from({ length: 7 }, (_, i) => `E${String(i + 1).padStart(2, '0')}`),
+    'A36', 'S02',
+  ];
+  const detalle = [
+    ...codigos.filter(c => c.startsWith('F')).map(codigo =>
+      ({ estado: 'contado', evento: { codigo }, puntos: 200 })),
+    ...codigos.filter(c => c.startsWith('E')).map(codigo =>
+      ({ estado: 'contado', evento: { codigo }, puntos: 200 })),
+    ...Array.from({ length: 3 }, () =>
+      ({ estado: 'contado', evento: { codigo: 'A36' }, puntos: 50 })),
+    { estado: 'serial_repetido', evento: { codigo: 'A36' }, puntos: 0 },
+    { estado: 'serial_ajeno', evento: { codigo: 'A36' }, puntos: 0 },
+    { estado: 'contado', evento: { codigo: 'S02' }, puntos: -500 },
+  ];
+  const matriz = puntajesDesdeDetalle(detalle, codigos);
+  comprobar('el detalle transversal agrega tres A36 reales en una sola celda',
+    matriz.A36, 150);
+  comprobar('la matriz transversal produce TOTAL 3850',
+    totalDesdeEventos(matriz), 3850);
 }
 
 console.log('');

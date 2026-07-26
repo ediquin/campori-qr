@@ -6,7 +6,7 @@
 
 import {
   REGLAS, PUNTOS_EVENTO, TOPE_FISICO, TOPE_ESPIRITUAL,
-  EVENTOS_ESPIRITUALES, buscarEvento, etiquetaTipo,
+  CANTIDAD_EVENTOS_FISICOS, EVENTOS_ESPIRITUALES, buscarEvento, etiquetaTipo,
 } from './catalogo.js';
 import { leerQr } from './codigo.js';
 
@@ -16,7 +16,6 @@ export const ESTADOS = {
   contado: { etiqueta: 'Contado', nivel: 'ok' },
   club: { etiqueta: 'QR de club', nivel: 'info' },
   repetido: { etiqueta: 'Evento repetido', nivel: 'alerta' },
-  excedente: { etiqueta: 'Fuera de los 8', nivel: 'aviso' },
   serial_repetido: { etiqueta: 'Sticker ya escaneado', nivel: 'alerta' },
   serial_ajeno: { etiqueta: 'Sticker de otro club', nivel: 'alerta' },
   desconocido: { etiqueta: 'Evento fuera del catálogo', nivel: 'alerta' },
@@ -40,7 +39,6 @@ export function calcular(escaneos, opciones = {}) {
   const serialesVistos = new Map();   // id de sticker -> posicion del escaneo
   const eventosContados = new Map();  // codigo de evento -> posicion del escaneo
   const contados = { fisico: [], espiritual: [], adicional: [], sancion: [] };
-  let fisicosDescartadosPorTope = 0;
 
   escaneos.forEach((escaneo, i) => {
     const anotar = (estado, extra = {}) => {
@@ -80,25 +78,17 @@ export function calcular(escaneos, opciones = {}) {
       return;
     }
 
-    // Las sanciones pueden repetirse (varios dias). Lo que no se permite es el mismo
-    // sticker dos veces, y eso ya lo bloqueo el control de serial de mas arriba.
+    // Las sanciones y los eventos marcados como repetibles pueden aparecer varias
+    // veces. Lo que no se permite es el mismo sticker dos veces, y eso ya lo bloqueó
+    // el control de serial de más arriba.
     const yaContado = eventosContados.get(evento.codigo);
-    const puedeRepetir = (evento.tipo === 'adicional' && REGLAS.adicionalesRepetibles) ||
+    const puedeRepetir = evento.repetible === true ||
+                         (evento.tipo === 'adicional' && REGLAS.adicionalesRepetibles) ||
                          (evento.tipo === 'sancion' && REGLAS.sancionesRepetibles);
     if (yaContado && !puedeRepetir) {
       anotar('repetido', {
         evento,
         detalleTexto: `"${evento.nombre}" ya se contó en la posición ${yaContado}`,
-      });
-      return;
-    }
-
-    // Tope de eventos fisicos: valen los primeros que se escanean.
-    if (evento.tipo === 'fisico' && contados.fisico.length >= REGLAS.fisicosQueCuentan) {
-      fisicosDescartadosPorTope++;
-      anotar('excedente', {
-        evento,
-        detalleTexto: `Ya hay ${REGLAS.fisicosQueCuentan} eventos físicos contados`,
       });
       return;
     }
@@ -168,13 +158,6 @@ export function calcular(escaneos, opciones = {}) {
 
   // ------------------------------------------------------------ alertas
 
-  if (fisicosDescartadosPorTope > 0) {
-    alertas.push({
-      nivel: 'aviso',
-      texto: `Pegaron ${contados.fisico.length + fisicosDescartadosPorTope} eventos físicos: ` +
-             `${fisicosDescartadosPorTope} de más. Solo cuentan los ${REGLAS.fisicosQueCuentan} primeros escaneados.`,
-    });
-  }
   if (espiritualesFaltantes.length) {
     alertas.push({
       nivel: 'aviso',
@@ -212,8 +195,8 @@ export function calcular(escaneos, opciones = {}) {
       puntos: puntosFisico,
       tope: TOPE_FISICO,
       hechos: contados.fisico.length,
-      cupo: REGLAS.fisicosQueCuentan,
-      excedentes: fisicosDescartadosPorTope,
+      cupo: CANTIDAD_EVENTOS_FISICOS,
+      minimoParaCompletar: REGLAS.fisicosMinimosParaCompletar,
       eventos: contados.fisico,
     },
     espiritual: {
@@ -241,7 +224,8 @@ export function calcular(escaneos, opciones = {}) {
     totalBase: puntosFisico + puntosEspiritual,
     detalle,
     alertas,
-    completo: espiritualesFaltantes.length === 0 && contados.fisico.length === REGLAS.fisicosQueCuentan,
+    completo: espiritualesFaltantes.length === 0
+      && contados.fisico.length >= REGLAS.fisicosMinimosParaCompletar,
   };
 }
 

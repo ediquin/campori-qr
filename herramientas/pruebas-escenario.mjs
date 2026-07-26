@@ -43,9 +43,11 @@ const ficha = [
   { que: 'Entrenamiento de astronautas', escaneo: pegar('F07', 30) },
   { que: 'Estrella espacial', escaneo: pegar('F08', 5) },
 
-  // Se pasaron del cupo: ya llevan 8 fisicos contados.
-  { que: 'EXCESO: noveno evento fisico', escaneo: pegar('F09', 12) },
-  { que: 'EXCESO: decimo evento fisico', escaneo: pegar('F10', 40) },
+  // Ya no existe el tope de ocho: los seis físicos restantes también suman.
+  ...EVENTOS_FISICOS.slice(8).map((e, i) => ({
+    que: `${e.nombre} (también cuenta)`,
+    escaneo: pegar(e.codigo, 40 + i),
+  })),
 
   ...EVENTOS_ESPIRITUALES.map((e, i) => ({ que: e.nombre, escaneo: pegar(e.codigo, i + 1) })),
 ];
@@ -93,42 +95,40 @@ console.log('\nCOMPROBACIONES');
 console.log('-'.repeat(78));
 
 comprobar('el QR de club no suma puntos', r.detalle[0].estado, 'club');
-comprobar('cuenta exactamente 8 eventos fisicos', r.fisico.hechos, 8);
-comprobar('los fisicos dan 1600', r.fisico.puntos, 1600);
+comprobar('cuenta los 14 eventos fisicos', r.fisico.hechos, 14);
+comprobar('los fisicos dan 2800', r.fisico.puntos, 2800);
 comprobar('cuenta los 7 espirituales', r.espiritual.hechos, 7);
 comprobar('los espirituales dan 1400', r.espiritual.puntos, 1400);
 comprobar('no falta ningun espiritual', r.espiritual.faltantes, []);
 comprobar('el total es el maximo posible', r.total, TOPE_BASE);
-comprobar('el total es 3000', r.total, 3000);
+comprobar('el total es 4200', r.total, 4200);
 comprobar('la ficha queda marcada como completa', r.completo, true);
 
 const porEstado = {};
 for (const d of r.detalle) porEstado[d.estado] = (porEstado[d.estado] || 0) + 1;
 comprobar('detecta el evento repetido', porEstado.repetido, 1);
-comprobar('detecta los 2 fisicos de mas', porEstado.excedente, 2);
 comprobar('detecta la fotocopia', porEstado.serial_repetido, 1);
 comprobar('detecta el sticker de otro club', porEstado.serial_ajeno, 1);
 comprobar('detecta el QR casero', porEstado.invalido, 1);
-comprobar('cuenta 15 escaneos validos', porEstado.contado, 15);
+comprobar('cuenta 21 escaneos validos', porEstado.contado, 21);
 
 comprobar('ninguna trampa suma puntos',
   r.detalle.filter(d => d.estado !== 'contado').every(d => d.puntos === 0), true);
 // Las cuatro graves: evento repetido, fotocopia, sticker ajeno y QR casero.
-// El exceso de fisicos es solo un aviso, no una trampa.
 comprobar('hay 4 alertas graves para revisar',
   r.alertas.filter(a => a.nivel === 'alerta').length, 4);
 comprobar('las alertas graves aparecen antes que los avisos',
   r.alertas.slice(0, 4).every(a => a.nivel === 'alerta'), true);
-comprobar('el exceso de fisicos queda como aviso, no como alerta',
-  r.alertas.at(-1).nivel, 'aviso');
+comprobar('hacer mas de ocho fisicos no agrega avisos',
+  r.alertas.filter(a => a.nivel === 'aviso').length, 0);
 
 // Un club que hizo todo bien no debe generar ninguna alerta.
 const limpio = calcular([
-  ...EVENTOS_FISICOS.slice(0, 8).map((e, i) => pegar(e.codigo, i + 1)),
+  ...EVENTOS_FISICOS.map((e, i) => pegar(e.codigo, i + 1)),
   ...EVENTOS_ESPIRITUALES.map((e, i) => pegar(e.codigo, i + 20)),
 ]);
 comprobar('una ficha impecable no genera alertas', limpio.alertas.length, 0);
-comprobar('una ficha impecable da 3000', limpio.total, 3000);
+comprobar('una ficha impecable da 4200', limpio.total, 4200);
 
 console.log('');
 if (fallos.length) {

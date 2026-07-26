@@ -14,12 +14,13 @@ export const CAMPORI = {
 export const PUNTOS_EVENTO = 200;
 
 export const REGLAS = {
-  // De los 14 fisicos disponibles cada club puede hacer 8. Si pegan mas,
-  // valen los 8 primeros que escanea el evaluador y la ficha queda marcada.
-  fisicosQueCuentan: 8,
+  // Todos los eventos físicos distintos suman. Ocho sigue siendo la meta mínima
+  // para considerar completo el bloque, pero ya no es un tope de puntaje.
+  fisicosMinimosParaCompletar: 8,
   // Los 7 espirituales son obligatorios: si falta alguno, se avisa.
   espiritualesObligatorios: 7,
-  // Cada evento adicional puede sumar una sola vez por club.
+  // Los adicionales cuentan una sola vez por defecto. Un evento concreto puede
+  // declarar `repetible: true` cuando cada sticker distinto deba sumar.
   adicionalesRepetibles: false,
   // Una misma sancion puede aplicarse varias veces (varios dias), asi que cada
   // sticker de sancion resta por separado. Lo que NO se permite es escanear el
@@ -46,6 +47,7 @@ export const EVENTOS_FISICOS = [
   { codigo: 'F13', nombre: 'Rescate en el espacio: La Salvación' },
   { codigo: 'F14', nombre: 'Ojos en el centro de control' },
 ];
+export const CANTIDAD_EVENTOS_FISICOS = EVENTOS_FISICOS.length;
 
 export const EVENTOS_ESPIRITUALES = [
   { codigo: 'E01', nombre: 'Los libros de la Biblia a la velocidad de la luz' },
@@ -58,7 +60,7 @@ export const EVENTOS_ESPIRITUALES = [
 ];
 
 // Eventos adicionales oficiales. Cada uno toma su puntaje del catálogo y cuenta
-// una sola vez.
+// una sola vez, salvo los que declaran `repetible: true`.
 export const CRITERIOS_ADICIONALES = [
   { codigo: 'A01', nombre: 'RFA VIERNES', puntos: 100 },
   { codigo: 'A02', nombre: 'CULTO GENERAL VIERNES MAÑANA', puntos: 100 },
@@ -104,7 +106,9 @@ export const CRITERIOS_ADICIONALES = [
   { codigo: 'A31', nombre: 'PLAZA DEL AVENTURERO', puntos: 200 },
   { codigo: 'A32', nombre: 'SEGURIDAD', puntos: 200 },
   { codigo: 'A33', nombre: 'LIMPIEZA KM4', puntos: 200 },
-  { codigo: 'A36', nombre: 'Puntos extra', puntos: 50 },
+  // Cada sticker distinto de Puntos extra suma otros 50. El control de serial evita
+  // que el mismo QR se cuente dos veces.
+  { codigo: 'A36', nombre: 'Puntos extra', puntos: 50, repetible: true },
 ];
 
 // Sanciones: restan puntaje. Cada una tiene puntos negativos y su propio QR.
@@ -118,9 +122,9 @@ export const SANCIONES = [
 
 // ------------------------------------------------------------------ derivados
 
-export const TOPE_FISICO = REGLAS.fisicosQueCuentan * PUNTOS_EVENTO;        // 1600
+export const TOPE_FISICO = CANTIDAD_EVENTOS_FISICOS * PUNTOS_EVENTO;        // 2800
 export const TOPE_ESPIRITUAL = REGLAS.espiritualesObligatorios * PUNTOS_EVENTO; // 1400
-export const TOPE_BASE = TOPE_FISICO + TOPE_ESPIRITUAL;                     // 3000
+export const TOPE_BASE = TOPE_FISICO + TOPE_ESPIRITUAL;                     // 4200
 
 const porCodigo = new Map();
 for (const e of EVENTOS_FISICOS) porCodigo.set(e.codigo, { ...e, tipo: 'fisico', puntos: PUNTOS_EVENTO });

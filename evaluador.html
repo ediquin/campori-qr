@@ -190,6 +190,7 @@
 
   <!-- ============================================== CLUBES ============ -->
   <section class="vista activa" id="vista-clubes">
+    <div id="aviso-consistencia" class="aviso-caja alerta oculto" style="margin-bottom:12px"></div>
     <div class="buscador">
       <div class="fila">
         <input type="search" id="buscar" placeholder="Buscar club, iglesia o región…" autocomplete="off">
@@ -247,7 +248,7 @@
       </div>
 
       <div class="marcadores">
-        <div class="marcador" id="m-fisicos"><div class="valor">0/8</div><div class="rotulo">Físicos</div></div>
+        <div class="marcador" id="m-fisicos"><div class="valor">0/14</div><div class="rotulo">Físicos · meta 8</div></div>
         <div class="marcador" id="m-espirituales"><div class="valor">0/7</div><div class="rotulo">Espirit.</div></div>
         <div class="marcador" id="m-adicional"><div class="valor">0</div><div class="rotulo">Adicional</div></div>
         <div class="marcador sancion" id="m-sancion" hidden><div class="valor">0</div><div class="rotulo">Sanción</div></div>
@@ -309,9 +310,10 @@
         </div>
         <div style="flex:0 0 auto"><button id="guardar-dispositivo">Guardar</button></div>
       </div>
-      <div class="aviso-caja" id="aviso-reloj" style="margin-bottom:0">
-        <strong>Revisá que la hora del celular esté bien.</strong> La regla de "los 8
-        primeros eventos físicos" usa la hora de cada escaneo.
+      <div class="aviso-caja" id="aviso-un-editor" style="margin-bottom:0">
+        <strong>Usá un solo teléfono por club.</strong> Distintos clubes pueden
+        sincronizarse a la vez; dos teléfonos editando el mismo club pueden producir
+        un conflicto que debe revisarse.
       </div>
     </div>
 
@@ -347,7 +349,7 @@
         <div style="flex:3 1 320px">
           <label for="sheets-url">Dirección del script (termina en /exec)</label>
           <input type="url" id="sheets-url"
-            value="https://script.google.com/macros/s/AKfycbzNc5k6vQBXXjlnaWsu7Mjdu9QlW7z3oDsXLZUUA3cccYXjbAL_ZIZs17MDm5KBkWEA/exec"
+            value="https://script.google.com/macros/s/AKfycbxb6XecjnQH5mV2gE1vO-9avtspgWLxJTG8Xu-DEW1sr_i4h5swRY9SUASFW-zE2aRs/exec"
             placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
         </div>
         <div>
@@ -363,6 +365,15 @@
         <div><button id="sheets-guardar">Guardar dirección</button></div>
       </div>
       <div id="sheets-estado"></div>
+
+      <h3>Control de consistencia</h3>
+      <p class="chico tenue" style="margin-top:-6px">
+        Verifica el molde y las fórmulas, y compara cada celda de
+        <strong>Puntajes</strong> con el cálculo reconstruido desde
+        <strong>Detalle de escaneos</strong>. No cambia puntajes sin pedir
+        confirmación y, al reparar, no reemplaza las filas de Detalle.
+      </p>
+      <button id="sheets-reconciliar">Comparar y recalcular desde Detalle</button>
 
       <h3>Stickers ya usados por otros clubes</h3>
       <p class="chico tenue" style="margin-top:-6px">
@@ -394,6 +405,6 @@
   <button data-vista="ajustes">Ajustes</button>
 </nav>
 
-<script type="module" src="js/evaluador.js?v=14"></script>
+<script type="module" src="js/evaluador.js?v=22"></script>
 </body>
 </html>

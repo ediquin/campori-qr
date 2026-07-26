@@ -10,12 +10,14 @@
  * CONCURRENCIA
  * Cada teléfono envía únicamente las celdas de evento que cambió. Bajo un bloqueo
  * global se compara el valor anterior de esas celdas y recién entonces se escribe.
- * Dos teléfonos pueden cambiar clubes distintos —o eventos distintos del mismo
- * club— sin pisarse. Si ambos cambian la misma celda desde un valor viejo, el
- * segundo recibe un conflicto y debe refrescar antes de reintentar.
+ * Dos teléfonos pueden cambiar clubes distintos sin pisarse. La matriz también
+ * protege eventos distintos del mismo club por celda, pero "Detalle de escaneos"
+ * se reemplaza como una fotografía completa del club: operativamente se debe usar
+ * un solo teléfono por club. Si ambos cambian la misma celda desde un valor viejo,
+ * el segundo recibe un conflicto y debe refrescar antes de reintentar.
  */
 
-const VERSION_API = 2;
+const VERSION_API = 3;
 const CLAVE = 'cambiame-por-una-frase-tuya';
 const HOJA_PUNTAJES = 'Puntajes';
 const HOJA_DETALLE = 'Detalle de escaneos';
@@ -50,11 +52,57 @@ function doPost(peticion) {
           && (esPreparacionExplicita || !esMatrizPuntajes(hojaPuntajes))) {
         asegurarMatrizPuntajes(libro, padron, eventos);
       }
+      if (esPreparacionExplicita) asegurarHojaDetalle(libro);
 
-      const resultadoCambios = cambios.length
-        ? aplicarCambiosPuntajes(libro, cambios, datos.dispositivo || '')
+      // La API 3 exige que cada cliente demuestre qué fotografía de Detalle leyó.
+      // Un teléfono con la app antigua se rechaza de forma segura hasta que recargue.
+      const cambiosCompatibles = cambios.filter(function (cambio) {
+        return cambio && Object.prototype.hasOwnProperty.call(cambio, 'revisionDetalle');
+      });
+      const conflictosVersion = cambios
+        .filter(function (cambio) {
+          return !cambio || !Object.prototype.hasOwnProperty.call(cambio, 'revisionDetalle');
+        })
+        .map(function (cambio) {
+          return {
+            idClub: String(cambio && cambio.idClub || '').trim(),
+            codigo: 'DETALLE',
+            error: 'La aplicación del teléfono es anterior a la API 3; recargala antes de enviar',
+          };
+        });
+      const conflictosHojasSinRevision = conflictosDeHojasSinCambioSeguro(
+        hojas,
+        cambiosCompatibles,
+        conflictosVersion
+      );
+      const resultadoCambios = cambiosCompatibles.length
+        ? aplicarCambiosPuntajes(libro, cambiosCompatibles, datos.dispositivo || '')
         : { aplicados: [], conflictos: [] };
-      const resumen = procesarHojasAuxiliares(libro, hojas);
+      resultadoCambios.conflictos = conflictosVersion
+        .concat(conflictosHojasSinRevision, resultadoCambios.conflictos);
+      // Si una celda entró en conflicto, tampoco reemplazamos el snapshot auxiliar
+      // de ese club. De otro modo podríamos conservar la matriz nueva pero borrar
+      // del Detalle los QR que produjo otro teléfono.
+      // El filtro se aplica SIEMPRE: un cliente anterior que mande solamente hojas
+      // no puede saltarse la huella de API 3 ni vaciar Detalle.
+      const hojasAplicables = limitarHojasAClubes(hojas, resultadoCambios.aplicados);
+      const resumen = procesarHojasAuxiliares(libro, hojasAplicables);
+      // Se devuelve la huella EXACTA que dejó este POST todavía bajo el bloqueo.
+      // Si entró otro QR local mientras viajaba el envío, el cliente puede usarla
+      // como base del siguiente snapshot sin adoptar a ciegas un GET posterior.
+      const revisionesDetalleAplicadas = {};
+      if (resultadoCambios.aplicados.length) {
+        const detallePosterior = leerDetalle(libro);
+        const revisionVaciaPosterior = huellaCodigosDetalle([]);
+        resultadoCambios.aplicados.forEach(function (idCrudo) {
+          const id = String(idCrudo || '').trim();
+          if (!id) return;
+          revisionesDetalleAplicadas[id] =
+            Object.prototype.hasOwnProperty.call(detallePosterior.revisionesDetalle, id)
+              ? detallePosterior.revisionesDetalle[id]
+              : revisionVaciaPosterior;
+        });
+      }
 
       registrarEnvio(libro, datos, resumen, resultadoCambios);
       const hayConflictos = resultadoCambios.conflictos.length > 0;
@@ -63,6 +111,7 @@ function doPost(peticion) {
         version: VERSION_API,
         aplicados: resultadoCambios.aplicados,
         conflictos: resultadoCambios.conflictos,
+        revisionesDetalle: revisionesDetalleAplicadas,
         hojas: resumen,
         error: hayConflictos
           ? 'Hay cambios más recientes en Google Sheets. Se conservaron y tenés que refrescar antes de reintentar.'
@@ -193,6 +242,16 @@ function asegurarMatrizPuntajes(libro, padronRecibido, catalogoRecibido) {
   if (filas.length) hoja.getRange(1, 1, filas.length + 1, encabezado.length).createFilter();
 }
 
+/** Crea únicamente el encabezado de auditoría cuando la planilla todavía es nueva. */
+function asegurarHojaDetalle(libro) {
+  if (libro.getSheetByName(HOJA_DETALLE)) return;
+  const hoja = libro.insertSheet(HOJA_DETALLE);
+  escribir(hoja, [
+    'ID', 'Club', 'Región', 'Orden', 'Código', 'Evento', 'Tipo', 'Estado',
+    'Puntos', 'Motivo', 'Evaluador', 'Fecha y hora', 'Código QR', 'Marca de tiempo',
+  ], []);
+}
+
 /**
  * Aplica parches de celdas, no filas completas. `anteriores` implementa control
  * optimista: solo hay conflicto si cambió la misma celda que el teléfono quiere tocar.
@@ -219,6 +278,13 @@ function aplicarCambiosPuntajes(libro, cambios, dispositivo) {
     if (id) filaPorId[id] = i;
   }
 
+  const requiereRevisionDetalle = cambios.some(function (cambio) {
+    return cambio && Object.prototype.hasOwnProperty.call(cambio, 'revisionDetalle');
+  });
+  const detalleActual = requiereRevisionDetalle ? leerDetalle(libro) : null;
+  const revisionesDetalle = detalleActual && detalleActual.revisionesDetalle || {};
+  const revisionVacia = huellaCodigosDetalle([]);
+
   const aplicados = [];
   const conflictos = [];
   cambios.forEach(function (cambio) {
@@ -227,6 +293,30 @@ function aplicarCambiosPuntajes(libro, cambios, dispositivo) {
     if (indiceFila == null) {
       conflictos.push({ idClub: id, error: 'El club no existe en la hoja Puntajes' });
       return;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(cambio, 'revisionDetalle')) {
+      if (!detalleActual.disponible) {
+        conflictos.push({
+          idClub: id,
+          codigo: 'DETALLE',
+          error: 'La hoja Detalle de escaneos no está disponible',
+        });
+        return;
+      }
+      const revisionActual = Object.prototype.hasOwnProperty.call(revisionesDetalle, id)
+        ? revisionesDetalle[id]
+        : revisionVacia;
+      if (String(cambio.revisionDetalle) !== String(revisionActual)) {
+        conflictos.push({
+          idClub: id,
+          codigo: 'DETALLE',
+          esperado: String(cambio.revisionDetalle),
+          actual: String(revisionActual),
+          error: 'Detalle cambió después de la comparación; se rechazó la reparación',
+        });
+        return;
+      }
     }
 
     const nuevos = cambio.eventos && typeof cambio.eventos === 'object' ? cambio.eventos : {};
@@ -281,12 +371,121 @@ function aplicarCambiosPuntajes(libro, cambios, dispositivo) {
 }
 
 /**
+ * Conserva en las hojas auxiliares únicamente los clubes cuya matriz fue aceptada.
+ * Los envíos sin clave de club (por ejemplo Parámetros) siguen siendo globales.
+ */
+function limitarHojasAClubes(hojas, idsPermitidos) {
+  const permitidos = {};
+  (idsPermitidos || []).forEach(function (id) {
+    const limpio = String(id || '').trim();
+    if (limpio) permitidos[limpio] = true;
+  });
+
+  return (hojas || []).map(function (entradaCruda) {
+    const entrada = entradaCruda || {};
+    const hojaConocidaPorClub = esHojaConocidaPorClub(entrada.nombre);
+    if (entrada.claveColumna == null && !hojaConocidaPorClub) return entrada;
+    const copia = {};
+    Object.keys(entrada).forEach(function (clave) { copia[clave] = entrada[clave]; });
+    const filas = Array.isArray(entrada.filas) ? entrada.filas : [];
+    const columna = hojaConocidaPorClub ? 0 : Number(entrada.claveColumna);
+    copia.claveColumna = columna;
+    // Detalle, Alertas y el resumen legado de Puntajes siempre se fusionan por ID.
+    // Nunca se confía en un "reemplazar" enviado por un teléfono desactualizado.
+    if (hojaConocidaPorClub) copia.reemplazar = false;
+    copia.filas = filas.length
+      ? [filas[0]].concat(filas.slice(1).filter(function (fila) {
+          return permitidos[String(fila && fila[columna] || '').trim()];
+        }))
+      : [];
+    const clubesReemplazar = Array.isArray(entrada.clubesReemplazar)
+      ? entrada.clubesReemplazar
+      : [];
+    copia.clubesReemplazar = clubesReemplazar.filter(function (id) {
+      return permitidos[String(id || '').trim()];
+    });
+    const tieneFilaPermitida = copia.filas.slice(1).some(function (fila) {
+      return permitidos[String(fila && fila[columna] || '').trim()];
+    });
+    // Si ningún club de esta hoja fue aceptado, ni siquiera se toca su encabezado.
+    // Un payload rechazado debe ser una operación completamente nula.
+    return copia.clubesReemplazar.length || tieneFilaPermitida ? copia : null;
+  }).filter(function (entrada) { return entrada !== null; });
+}
+
+/**
+ * Toda hoja con filas por club debe corresponder a un cambio API 3 con huella.
+ * Así se rechazan explícitamente los payloads legados que enviaban el snapshot
+ * auxiliar sin `cambios`, incluso si omiten `claveColumna` o piden reemplazar.
+ */
+function conflictosDeHojasSinCambioSeguro(hojas, cambiosCompatibles, conflictosPrevios) {
+  const seguros = {};
+  (cambiosCompatibles || []).forEach(function (cambio) {
+    const id = String(cambio && cambio.idClub || '').trim();
+    if (id) seguros[id] = true;
+  });
+  const yaReportados = {};
+  (conflictosPrevios || []).forEach(function (conflicto) {
+    const id = String(conflicto && conflicto.idClub || '').trim();
+    if (id) yaReportados[id] = true;
+  });
+
+  const solicitados = {};
+  let hayHojaPorClub = false;
+  (hojas || []).forEach(function (entradaCruda) {
+    const entrada = entradaCruda || {};
+    const conocida = esHojaConocidaPorClub(entrada.nombre);
+    if (entrada.claveColumna == null && !conocida) return;
+    hayHojaPorClub = true;
+    const columna = conocida ? 0 : Number(entrada.claveColumna);
+    const clubesReemplazar = Array.isArray(entrada.clubesReemplazar)
+      ? entrada.clubesReemplazar
+      : [];
+    clubesReemplazar.forEach(function (idCrudo) {
+      const id = String(idCrudo || '').trim();
+      if (id) solicitados[id] = true;
+    });
+    const filas = Array.isArray(entrada.filas) ? entrada.filas : [];
+    filas.slice(1).forEach(function (fila) {
+      const id = String(fila && fila[columna] || '').trim();
+      if (id) solicitados[id] = true;
+    });
+  });
+
+  const conflictos = Object.keys(solicitados)
+    .filter(function (id) { return !seguros[id] && !yaReportados[id]; })
+    .map(function (id) {
+      return {
+        idClub: id,
+        codigo: 'DETALLE',
+        error: 'La hoja auxiliar no tiene un cambio API 3 con huella para este club',
+      };
+    });
+  if (hayHojaPorClub && !Object.keys(solicitados).length && !Object.keys(seguros).length) {
+    conflictos.push({
+      idClub: '',
+      codigo: 'DETALLE',
+      error: 'Una hoja por club no puede reemplazarse sin cambios API 3 con huella',
+    });
+  }
+  return conflictos;
+}
+
+function esHojaConocidaPorClub(nombre) {
+  const normalizado = normalizarTexto(nombre);
+  return normalizado === normalizarTexto(HOJA_PUNTAJES)
+    || normalizado === normalizarTexto(HOJA_DETALLE)
+    || normalizado === 'alertas';
+}
+
+/**
  * Mantiene las hojas de auditoría compatibles con los teléfonos anteriores. Cuando
- * Puntajes ya es una matriz v2, nunca se la reemplaza con el resumen legado.
+ * Puntajes ya es una matriz por eventos, nunca se la reemplaza con el resumen legado.
  */
 function procesarHojasAuxiliares(libro, hojas) {
   const resumen = [];
-  hojas.forEach(function (entrada) {
+  hojas.forEach(function (entradaCruda) {
+    const entrada = entradaCruda || {};
     const nombre = String(entrada.nombre || 'Datos').slice(0, 90);
     const filas = Array.isArray(entrada.filas) ? entrada.filas : [];
     if (!filas.length) return;
@@ -301,10 +500,13 @@ function procesarHojasAuxiliares(libro, hojas) {
     const encabezado = filas[0];
     const nuevas = filas.slice(1);
     let finales;
-    if (entrada.reemplazar || entrada.claveColumna == null) {
+    const hojaConocidaPorClub = esHojaConocidaPorClub(nombre);
+    const reemplazar = hojaConocidaPorClub ? false : entrada.reemplazar;
+    const claveColumna = hojaConocidaPorClub ? 0 : entrada.claveColumna;
+    if (reemplazar || claveColumna == null) {
       finales = nuevas;
     } else {
-      const col = entrada.claveColumna;
+      const col = claveColumna;
       const entrantes = {};
       (entrada.clubesReemplazar || []).forEach(function (id) {
         if (String(id)) entrantes[String(id)] = true;
@@ -376,37 +578,80 @@ function registrarEnvio(libro, datos, resumen, resultadoCambios) {
 }
 
 function doGet(peticion) {
-  const parametros = peticion && peticion.parameter || {};
-  if (parametros.accion !== 'seriales' && parametros.accion !== 'estado') {
-    return responder({
-      ok: true,
-      version: VERSION_API,
-      mensaje: 'El script está publicado y responde.',
-    });
-  }
-  if (parametros.clave !== CLAVE) {
-    return responder({ ok: false, version: VERSION_API, error: 'Clave incorrecta' });
-  }
+  try {
+    const parametros = peticion && peticion.parameter || {};
+    if (parametros.accion !== 'seriales' && parametros.accion !== 'estado') {
+      return responder({
+        ok: true,
+        version: VERSION_API,
+        mensaje: 'El script está publicado y responde.',
+      });
+    }
+    if (parametros.clave !== CLAVE) {
+      return responder({ ok: false, version: VERSION_API, error: 'Clave incorrecta' });
+    }
 
-  const libro = SpreadsheetApp.getActiveSpreadsheet();
-  const detalle = leerDetalle(libro);
-  const puntajes = leerPuntajes(libro);
-  const base = {
-    ok: true,
-    version: VERSION_API,
-    seriales: detalle.seriales,
-    clubes: Math.max(detalle.clubes, puntajes.puntajes.length),
-    eventos: puntajes.eventos,
-    puntajes: puntajes.puntajes,
-    revision: new Date().toISOString(),
-  };
-  if (parametros.accion === 'estado') base.escaneos = detalle.escaneos;
-  return responder(base);
+    // Se usa el mismo bloqueo que doPost: Detalle y Puntajes deben pertenecer a
+    // una sola fotografía coherente, nunca a dos momentos distintos del envío.
+    const cerrojo = LockService.getScriptLock();
+    if (!cerrojo.tryLock(30000)) {
+      return responder({
+        ok: false,
+        version: VERSION_API,
+        error: 'Otro teléfono está guardando en este momento. Probá de nuevo en unos segundos.',
+      });
+    }
+    try {
+      const libro = SpreadsheetApp.getActiveSpreadsheet();
+      const detalle = leerDetalle(libro);
+      const puntajes = leerPuntajes(libro);
+      const revisionVacia = huellaCodigosDetalle([]);
+      puntajes.puntajes.forEach(function (fila) {
+        if (!Object.prototype.hasOwnProperty.call(detalle.revisionesDetalle, fila.idClub)) {
+          detalle.revisionesDetalle[fila.idClub] = revisionVacia;
+        }
+      });
+      const base = {
+        ok: true,
+        version: VERSION_API,
+        seriales: detalle.seriales,
+        clubes: Math.max(detalle.clubes, puntajes.puntajes.length),
+        detalleDisponible: detalle.disponible,
+        revisionesDetalle: detalle.revisionesDetalle,
+        eventos: puntajes.eventos,
+        puntajes: puntajes.puntajes,
+        revision: new Date().toISOString(),
+      };
+      if (parametros.accion === 'estado') base.escaneos = detalle.escaneos;
+      return responder(base);
+    } finally {
+      cerrojo.releaseLock();
+    }
+  } catch (error) {
+    return responder({ ok: false, version: VERSION_API, error: String(error) });
+  }
 }
 
 function leerDetalle(libro) {
   const hoja = libro.getSheetByName(HOJA_DETALLE);
-  if (!hoja || hoja.getLastRow() < 2) return { seriales: {}, clubes: 0, escaneos: [] };
+  if (!hoja) {
+    return {
+      disponible: false,
+      seriales: {},
+      clubes: 0,
+      escaneos: [],
+      revisionesDetalle: {},
+    };
+  }
+  if (hoja.getLastRow() < 2) {
+    return {
+      disponible: true,
+      seriales: {},
+      clubes: 0,
+      escaneos: [],
+      revisionesDetalle: {},
+    };
+  }
 
   const valores = hoja.getRange(1, 1, hoja.getLastRow(), hoja.getLastColumn()).getValues();
   const encabezado = valores[0].map(String);
@@ -421,6 +666,7 @@ function leerDetalle(libro) {
 
   const seriales = {};
   const clubes = {};
+  const codigosPorClub = {};
   const escaneos = [];
   for (let i = 1; i < valores.length; i++) {
     const id = String(valores[i][colId] || '').trim();
@@ -429,6 +675,8 @@ function leerDetalle(libro) {
     if (!seriales[qr]) seriales[qr] = [];
     if (seriales[qr].indexOf(id) < 0) seriales[qr].push(id);
     clubes[id] = true;
+    if (!codigosPorClub[id]) codigosPorClub[id] = [];
+    codigosPorClub[id].push(qr);
     let ts = colTs >= 0 ? Number(valores[i][colTs]) : 0;
     if (!isFinite(ts) || ts < 0) ts = colOrden >= 0 ? Number(valores[i][colOrden]) : i;
     escaneos.push({
@@ -438,7 +686,31 @@ function leerDetalle(libro) {
       dispositivo: colDispositivo >= 0 ? String(valores[i][colDispositivo] || '') : '',
     });
   }
-  return { seriales: seriales, clubes: Object.keys(clubes).length, escaneos: escaneos };
+  const revisionesDetalle = {};
+  Object.keys(codigosPorClub).forEach(function (id) {
+    revisionesDetalle[id] = huellaCodigosDetalle(codigosPorClub[id]);
+  });
+  return {
+    disponible: true,
+    seriales: seriales,
+    clubes: Object.keys(clubes).length,
+    escaneos: escaneos,
+    revisionesDetalle: revisionesDetalle,
+  };
+}
+
+/** Huella estable del conjunto de QR de un club, independiente del orden de filas. */
+function huellaCodigosDetalle(codigos) {
+  const ordenados = (codigos || []).map(function (codigo) {
+    return String(codigo || '').trim().toUpperCase();
+  }).filter(String).sort();
+  const texto = ordenados.join('\n');
+  let hash = 2166136261;
+  for (let i = 0; i < texto.length; i++) {
+    hash ^= texto.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ordenados.length + '-' + (hash >>> 0).toString(16);
 }
 
 function leerPuntajes(libro) {
@@ -457,6 +729,9 @@ function leerPuntajes(libro) {
   const colActualizado = indiceEncabezado(encabezado, 'actualizado');
   const colEvaluador = indiceEncabezado(encabezado, 'evaluador');
   if (colId < 0) return { eventos: [], puntajes: [] };
+  const formulasTotal = colTotal >= 0 && valores.length > 1
+    ? hoja.getRange(2, colTotal + 1, valores.length - 1, 1).getFormulasR1C1()
+    : [];
 
   const eventos = Object.keys(columnas)
     .map(function (codigo) {
@@ -484,6 +759,9 @@ function leerPuntajes(libro) {
       region: colRegion >= 0 ? String(valores[i][colRegion] || '') : '',
       eventos: porEvento,
       total: colTotal >= 0 ? numero(valores[i][colTotal]) : 0,
+      totalConFormula: colTotal >= 0
+        && String(formulasTotal[i - 1] && formulasTotal[i - 1][0] || '').toUpperCase()
+          === '=MAX(0,SUM(RC4:RC[-1]))',
       revision: colRevision >= 0 ? numero(valores[i][colRevision]) : 0,
       actualizado: actualizado instanceof Date ? actualizado.toISOString() : String(actualizado || ''),
       evaluador: colEvaluador >= 0 ? String(valores[i][colEvaluador] || '') : '',

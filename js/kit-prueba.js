@@ -32,8 +32,8 @@ function crearGuion() {
   // La tanda es independiente del club. Es el mismo modelo de los stickers reales:
   // cualquiera puede recibirlos, pero cada ejemplar solo puede usarse una vez.
   return [
-    ...EVENTOS_FISICOS.slice(0, 8).map((e, i) => ({
-      codigo: e.codigo, serial: serialUnico(e.codigo), grupo: 'Los 8 eventos físicos',
+    ...EVENTOS_FISICOS.map(e => ({
+      codigo: e.codigo, serial: serialUnico(e.codigo), grupo: 'Los 14 eventos físicos · todos suman',
       esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
     })),
     {
@@ -41,12 +41,7 @@ function crearGuion() {
       esperado: 'repetido', nota: 'Evento repetido: no suma',
       explicacion: 'Es otro sticker de un evento que el club ya hizo. La app lo marca en rojo.',
     },
-    {
-      codigo: 'F09', serial: serialUnico('F09'), grupo: 'Trampas',
-      esperado: 'excedente', nota: 'Noveno físico: no suma',
-      explicacion: 'Pasado el cupo de 8, la app avisa y no lo cuenta.',
-    },
-    ...EVENTOS_ESPIRITUALES.map((e, i) => ({
+    ...EVENTOS_ESPIRITUALES.map(e => ({
       codigo: e.codigo, serial: serialUnico(e.codigo), grupo: 'Los 7 espirituales (obligatorios)',
       esperado: 'contado', nota: `+${PUNTOS_EVENTO}`,
     })),

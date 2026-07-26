@@ -12,14 +12,16 @@ aplicaciones. Son archivos HTML, CSS y JavaScript que el navegador abre tal cual
 
 | Bloque | Eventos | Puntos c/u | Regla | Máximo |
 |---|---|---|---|---|
-| Físicos | 14 disponibles | 200 | Solo cuentan los **8 primeros escaneados** | **1600** |
+| Físicos | 14 disponibles | 200 | **Todos los distintos suman**; 8 es la meta mínima | **2800** |
 | Espirituales | 7 | 200 | Los 7 son **obligatorios** | **1400** |
-| **Puntaje base** | | | | **3000** |
-| Adicional | 36 eventos | 50 a 500 | Cada evento cuenta una vez y suma **aparte** del puntaje base | — |
+| **Puntaje base** | | | | **4200** |
+| Adicional | 36 eventos | 50 a 500 | Cada evento cuenta una vez, salvo **Puntos extra**, y suma aparte del puntaje base | — |
 | Sanciones | 3 | −2000 / −500 | Restan del total; se pueden repetir (varios días) | — |
 
 Los físicos y espirituales suman 200; los adicionales suman lo que dice el catálogo
-(los 29 originales 100; Plaza / Seguridad / Limpieza Km4 200).
+(los 29 originales 100; Plaza / Seguridad / Limpieza Km4 200). **Puntos extra
+(`A36`) vale 50 y se puede repetir con stickers distintos**: cada uno suma otros 50.
+El mismo QR escaneado dos veces continúa bloqueado.
 
 **Botiquín es una rúbrica de tres niveles**: Personal (500), Proactividad (450) y
 Solo Botiquín (250). El club recibe **uno solo**, el que le corresponda. Si por error
@@ -33,8 +35,8 @@ ven en rojo, y en el Excel hay columnas de "Sanciones" y "Puntos sanción".
 
 Lo que el sistema detecta solo:
 
-- **Evento repetido** — dos stickers distintos del mismo evento.
-- **Más de 8 físicos** — cuentan los 8 primeros que escaneás, el resto queda marcado.
+- **Evento repetido** — dos stickers distintos del mismo evento, excepto `A36`.
+- **Evento físico repetido** — un segundo sticker del mismo evento no vuelve a sumar.
 - **Sticker escaneado dos veces** — la misma fotocopia pegada dos veces.
 - **Sticker de otro club** — uno despegado de otra ficha. Dice de qué club era.
 - **QR falsificado** — cualquiera que no lleve nuestra firma.
@@ -51,8 +53,9 @@ Abrí `js/catalogo.js`. Ahí están los eventos, sus puntajes y las sanciones: e
 final** (con códigos nuevos), nunca renumeres los existentes: los QR ya impresos
 dependen de su código.
 
-- `CRITERIOS_ADICIONALES`: los 33 eventos adicionales. Los primeros 29 valen 100; los
-  últimos cuatro valen 500 (Botiquín) y 200 (Plaza / Seguridad / Limpieza Km4).
+- `CRITERIOS_ADICIONALES`: los 36 eventos adicionales. Los primeros 29 valen 100;
+  Botiquín usa 500/450/250, Plaza / Seguridad / Limpieza Km4 valen 200 y Puntos
+  extra vale 50 por cada sticker distinto.
 - `SANCIONES`: las tres que restan (`S01`–`S03`).
 - `clave`: hoy solo firma el QR de cabecera del club, no los stickers de evento. No
   hace falta cambiarla salvo que quieras.
@@ -110,6 +113,10 @@ detiene antes de enviar y ofrece tres opciones: **subirlos**, **descartarlos y u
 Google Sheets**, o **seguir sin conexión**. Descartar elimina solamente la copia
 local de escaneos y estados; conserva la dirección, la clave y el nombre del
 evaluador, y reconstruye los resultados con lo que exista en la planilla.
+Si la caché proviene de una versión anterior a API 3 y la planilla ya tiene filas
+del mismo club, **Subir se bloquea**: sin una huella base no es posible distinguir
+los cambios propios de los ajenos. En ese caso hay que descartar o revisar el club
+manualmente; una planilla todavía vacía sí admite esa primera subida.
 
 El detalle siempre se envía: es indispensable para detectar el mismo serial en dos
 clubes. Si eso ocurre, **ninguno recibe los puntos** hasta que se aclare el incidente
@@ -117,12 +124,14 @@ con los directores y se corrija manualmente la planilla final.
 
 Tres cosas que conviene respetar:
 
-1. **Repartan los clubes de antemano**, lo más simple es por región. Cada evaluador
-   toca solo sus clubes.
+1. **Repartan los clubes de antemano**, lo más simple es por región. Usen un solo
+   teléfono por club: la matriz tolera ediciones paralelas, pero el historial de
+   Detalle es una fotografía completa del club. La API 3 rechaza la segunda fotografía
+   si partió de una versión anterior, pero ese conflicto todavía exige revisión humana.
 2. **Pónganle nombre a cada teléfono** en `Ajustes → Este teléfono`. Queda anotado en
    cada escaneo, y así la app puede avisar si dos personas evaluaron el mismo club.
-3. **Revisen que la hora de los celulares esté bien.** La regla de "los 8 primeros
-   eventos físicos" usa la hora del escaneo.
+3. **Recarguen todos los teléfonos después de publicar una regla nueva.** Un cliente
+   viejo puede seguir calculando con la versión anterior hasta que se actualice.
 
 ### Sincronización con Google Sheets
 
@@ -140,9 +149,17 @@ Preparación, una sola vez:
 5. Copiá la dirección que termina en `/exec` y pegala en la pantalla inicial de la
    aplicación, junto con la misma clave.
 
+Si el script ya estaba instalado, reemplazá el código y en **Administrar
+implementaciones** publicá una versión nueva del mismo despliegue. La API 3 agrega
+lecturas atómicas y huellas de Detalle; la dirección `/exec` se conserva. La app
+guarda la huella base por planilla incluso al cerrarse, y cada POST aceptado devuelve
+su nueva huella bajo el mismo bloqueo. Por eso un reintento o una recarga no puede
+convertir silenciosamente el snapshot viejo de un teléfono en el estado actual.
+
 Cada teléfono manda **solo las celdas de eventos que modificó**, agrupadas por club,
-junto con el detalle de sus escaneos. El Apps Script aplica esos parches bajo bloqueo
-y compara el valor anterior de cada celda. Dos evaluadores que trabajan clubes
+junto con el detalle de sus escaneos. El Apps Script aplica esos parches bajo bloqueo,
+lee `Detalle` y `Puntajes` bajo ese mismo bloqueo y compara el valor anterior de cada
+celda. Dos evaluadores que trabajan clubes
 distintos no se pisan; si intentan cambiar la misma celda desde un estado viejo, se
 devuelve un conflicto y la app obliga a refrescar. La hoja `Envíos` deja constancia
 de quién mandó qué y cuándo.
@@ -160,6 +177,19 @@ al volver a la app o en un máximo aproximado de 20 segundos.
 No cambies `ID` ni edites `TOTAL`: TOTAL es una fórmula. Si además hay que invalidar
 un sticker, borrá o corregí su fila en **Detalle de escaneos**, que sigue siendo la
 auditoría para detectar un mismo QR en dos clubes.
+
+La matriz manda para los valores normales. Como excepción de seguridad, si el propio
+Detalle compartido demuestra que un serial está en dos clubes, la app deja de mostrar
+esos puntos inmediatamente aunque la celda todavía no se haya reconciliado.
+
+En **Ajustes → Control de consistencia**, el botón **Comparar y recalcular desde
+Detalle** contrasta cada celda y la fórmula TOTAL con los QR guardados. Primero muestra
+las diferencias y pide confirmación; las reducciones a cero exigen una segunda
+confirmación y un Detalle vacío nunca puede vaciar Puntajes automáticamente. La
+reparación toca solo `Puntajes`, sin reemplazar el historial de Detalle. Además lleva
+una huella por club: si otro teléfono cambia Detalle durante la revisión, el Apps
+Script rechaza el parche obsoleto. Es el control para migrar reglas nuevas y detectar
+una suma parcial como 1000 cuando ocho eventos físicos exigen 1600.
 
 Cuando un QR aparece en dos clubes, ambos quedan con ese sticker en conflicto y
 reciben 0 puntos. La decisión sobre el dueño legítimo se toma fuera de la app.
@@ -278,7 +308,7 @@ redundancia disponible y conserva el patrón de alineación para leerlo inclinad
 
 ## Las pruebas
 
-406 comprobaciones, sin framework:
+La batería automatizada, sin framework, cubre:
 
 - **Núcleo** — la firma coincide con `crypto` de Node; se rechazan QR alterados en
   cualquier campo; el motor de puntaje cumple las reglas y detecta cada trampa.
@@ -300,8 +330,8 @@ redundancia disponible y conserva el patrón de alineación para leerlo inclinad
   y los datos (acentos, comillas, números, celdas vacías) estén intactos.
 - **PDF de stickers** — comprueba oficio de 215 × 330 mm con 204 QR, carta de
   216 × 281,5 mm con 168 QR, dibujo vectorial, estructura `xref` y longitudes.
-- **Google Sheets** — verifica que varios evaluadores puedan actualizar clubes
-  distintos sin pisarse y que los seriales con más de un club se conserven completos.
+- **Google Sheets** — verifica parches concurrentes, cambios que llegan durante un
+  POST, protección durante un GET y las invariantes Detalle ↔ Puntajes ↔ TOTAL.
 - **Escenario completo** — una ficha realista del club de prueba `ediquin`, con sus
-  errores y sus cinco trampas. Imprime un informe legible de qué hace el sistema en
+  errores y sus cuatro trampas. Imprime un informe legible de qué hace el sistema en
   cada caso.

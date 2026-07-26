@@ -22,14 +22,16 @@ Reglas del puntaje:
 
 | Bloque | Eventos | Puntos c/u | Regla | Máximo |
 |---|---|---|---|---|
-| Físicos | 14 disponibles | 200 | Cuentan los **8 primeros escaneados** | 1600 |
+| Físicos | 14 disponibles | 200 | **Todos los distintos suman**; 8 es meta mínima | 2800 |
 | Espirituales | 7 | 200 | Los 7 son obligatorios | 1400 |
-| **Base** | | | | **3000** |
-| Adicional | 36 eventos | 50 / 100 / 200 / 250 / 450 / 500 | Cada evento cuenta una vez, fuera del tope base | — |
+| **Base** | | | | **4200** |
+| Adicional | 36 eventos | 50 / 100 / 200 / 250 / 450 / 500 | Cada evento cuenta una vez, salvo A36, fuera del tope base | — |
 | Sanciones | 3 | −2000 / −500 | Restan del total; se pueden repetir (varios días) | — |
 
 Los eventos físicos y espirituales valen 200. Los adicionales valen lo que dice el
-catálogo. Ningún evento se repite, salvo las sanciones.
+catálogo. Ningún evento se repite, salvo las sanciones y **Puntos extra (`A36`)**.
+A36 declara `repetible: true`: cada sticker con un serial distinto suma 50, mientras
+el control general de serial impide contar dos veces el mismo QR.
 
 **Botiquín es una rúbrica de tres niveles** (`A30` Personal 500, `A34` Proactividad
 450, `A35` Solo 250), unidos por `rubrica: 'botiquin'`. El club recibe **uno solo**.
@@ -173,7 +175,6 @@ Están puestas en cascada. Cada una tapa un agujero distinto:
 |---|---|---|
 | **Clave compuesta en la base** | El mismo sticker escaneado dos veces en la misma ficha | — |
 | **Evento ya contado** | Dos stickers distintos del mismo evento | — |
-| **Cupo de 8 físicos** | Más eventos de los permitidos | — |
 | **Seriales usados por otros** | Sticker despegado de una ficha y pegado en otra | Ver 4.2 |
 
 ### 4.1 Formato operativo simple
@@ -250,7 +251,6 @@ Cada escaneo termina en exactamente uno de estos estados:
 | `contado` | ok | sí — o **resta**, si es una sanción (puntos negativos) |
 | `club` | info | no — es el QR de cabecera de la ficha |
 | `repetido` | alerta | no |
-| `excedente` | aviso | no — pasó el cupo de 8 |
 | `serial_repetido` | alerta | no — el mismo sticker dos veces |
 | `serial_ajeno` | alerta | no — ya lo usó otro club |
 | `desconocido` | alerta | no — código fuera del catálogo |
@@ -270,11 +270,10 @@ una alerta grave para el jurado.
 4. ¿Ya escaneamos este serial en esta ficha?
 5. ¿Lo usó otro club?
 6. ¿Ya contamos este evento?
-7. ¿Se llenó el cupo de 8 físicos?
 
-Un detalle sutil verificado por prueba: **un evento repetido no consume cupo**. Si un
-club pega F01 dos veces y después 7 eventos más, llega igual a los 8 que le
-corresponden.
+Los 14 físicos distintos pueden entrar en cualquier orden y siempre producen el mismo
+resultado. Ocho conserva únicamente el significado de meta mínima para marcar el
+bloque como completo; no limita el puntaje.
 
 Las alertas se ordenan por gravedad. La primera versión ponía "faltan espirituales"
 —que le aparece a casi toda ficha a medio evaluar— por encima de un sticker robado.
@@ -302,7 +301,7 @@ envía lo pendiente y trae el detalle completo. Una corrección manual en la hoj
 
 ### Cómo conviven varios teléfonos en la misma planilla
 
-Tres decisiones que hacen que esto funcione, y las tres nacieron de un fallo real:
+Cuatro decisiones que hacen que esto funcione, y todas nacieron de un fallo real:
 
 1. **Cada teléfono manda solo los clubes que evaluó.** La versión anterior mandaba
    todo el padrón; los no evaluados iban con cero y **pisaban el trabajo del otro
@@ -313,6 +312,26 @@ Tres decisiones que hacen que esto funcione, y las tres nacieron de un fallo rea
    resultado; reenviar no duplica.
 3. **El script toma un cerrojo** (`LockService`) mientras escribe. Sin él, dos envíos
    simultáneos leerían la planilla vieja y el último en terminar borraría al otro.
+4. **La huella base de Detalle se conserva también al recargar.** Se guarda por URL
+   de Apps Script en IndexedDB. Cada POST aceptado devuelve, todavía bajo el cerrojo,
+   la huella exacta que dejó; así un QR que entra mientras el envío está viajando
+   puede continuar desde esa base sin adoptar el cambio de otro teléfono.
+
+La matriz se parchea por celda, pero `Detalle de escaneos` se publica como fotografía
+completa de cada club. Por eso la regla operativa es **un teléfono por club**; muchos
+teléfonos sí pueden trabajar clubes distintos simultáneamente. La app diagnostica si
+encuentra nombres de evaluador distintos dentro de un mismo club. En la API 3 cada
+envío incluye la huella de la fotografía que leyó: si otro teléfono ya cambió ese
+club, el segundo envío y sus reintentos se rechazan completos antes de tocar la
+matriz, las filas o incluso los encabezados auxiliares.
+
+La interfaz también audita permanentemente tres representaciones: cálculo desde
+`Detalle`, celdas de `Puntajes` y fórmula `TOTAL`. Las diferencias se muestran en la
+lista y en Ajustes. La reparación es explícita, usa parches optimistas, valida bajo el
+mismo `LockService` una huella de Detalle por club y no vuelve a escribir `Detalle`,
+para no destruir la evidencia que intenta reconciliar. Las lecturas usan también ese
+cerrojo, por lo que una respuesta nunca mezcla Detalle viejo con Puntajes nuevos.
+Detalle vacío bloquea puestas a cero masivas y cada reducción exige doble confirmación.
 
 ### Detalle de implementación fácil de pisar
 
@@ -366,7 +385,7 @@ Herramientas (Node, sin dependencias)
 
 ## 9. Estrategia de pruebas
 
-`node herramientas/pruebas.mjs` — **406 comprobaciones**, sin framework.
+`node herramientas/pruebas.mjs` — batería completa sin framework.
 
 El criterio: cada suite tiene que probar contra algo **independiente**, no contra sí
 misma.
@@ -379,7 +398,7 @@ misma.
 | `pruebas-exportar.mjs` | El `.xlsx` se reabre y se comprueban los **CRC del ZIP** y los datos (acentos, comillas, signos de XML, números, celdas vacías). |
 | `pruebas-pdf.mjs` | El PDF declara oficio 215 × 330 mm o carta 216 × 281,5 mm, **agrupa cada evento en su propio bloque con título** (192 QR/hoja en oficio, 168 en carta, dejando lugar a la banda de título), parte un evento largo repitiendo su título con el rango, usa vectores y mantiene válidos `xref` y `/Length`. |
 | `pruebas-sheets.mjs` | La regla de fusión, incluido el caso que rompía (mandar clubes no evaluados), y que un serial presente en dos clubes deje a ambos en conflicto. |
-| `pruebas-escenario.mjs` | Una ficha realista del club `ediquin` con sus cinco trampas. Imprime un informe legible. |
+| `pruebas-escenario.mjs` | Una ficha realista del club `ediquin` con sus cuatro trampas. Imprime un informe legible. |
 
 ### Fallos reales que encontraron
 
@@ -409,7 +428,7 @@ Todos medidos, no estimados:
 |---|---|---|
 | Inclinación del lector propio | deja de leer más allá de **~45°** respecto de la perpendicular | Solo iPhone. Está anotado como prueba, así que si mejora o empeora, avisa. |
 | Versiones QR soportadas | 1 a 10 | Nuestros códigos son versión 2. Sobra. |
-| Desfase de relojes | no se corrige | La regla de "los 8 primeros" usa la hora del escaneo. Con relojes desfasados el orden puede salir mal. Solo se avisa. |
+| Dos teléfonos sobre el mismo club | Detalle es una fotografía completa | Puede requerir revisión; la operación asigna un teléfono por club y la app lo diagnostica. |
 | Copia de QR | no se intenta impedir | La operación prioriza rapidez; los duplicados sí se detectan. |
 | Detección entre clubes | requiere juntar datos | Ver 4.2. |
 
@@ -427,14 +446,16 @@ Si el objetivo es dar feedback, mirar acá primero:
    escribir en la planilla. Por eso se guarda en el teléfono y nunca en el repo.
 4. **La sincronización no es instantánea.** Google Apps Script no puede enviar cambios
    al navegador: los teléfonos consultan cada 20 segundos.
-5. **El desfase de relojes no tiene defensa**, solo un aviso en Ajustes.
+5. **Un cliente viejo puede conservar reglas anteriores** hasta recargar. Después de
+   desplegar cambios de puntaje se deben actualizar todos los teléfonos antes de seguir.
 
 ---
 
 ## 12. Cómo extenderlo sin romperlo
 
-- **Cambiar reglas o puntajes**: solo [`js/catalogo.js`](js/catalogo.js). Como el
-  puntaje se recalcula siempre, no hay que migrar nada.
+- **Cambiar reglas o puntajes**: editar [`js/catalogo.js`](js/catalogo.js), recargar
+  todos los teléfonos y ejecutar el control Detalle ↔ Puntajes. IndexedDB recalcula,
+  pero una matriz de Sheets ya publicada necesita reconciliación explícita.
 - **Agregar eventos**: al final de la lista, con códigos nuevos.
 - **Cambiar el padrón**: editar el Excel y correr
   `node herramientas/generar-clubes.mjs`. Nunca editar `js/clubes.js` a mano.

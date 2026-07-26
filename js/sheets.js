@@ -13,8 +13,9 @@
 // autoriza realmente a leer y escribir en la planilla.
 
 export const URL_PREDETERMINADA =
-  'https://script.google.com/macros/s/AKfycbzNc5k6vQBXXjlnaWsu7Mjdu9QlW7z3oDsXLZUUA3cccYXjbAL_ZIZs17MDm5KBkWEA/exec';
+  'https://script.google.com/macros/s/AKfycbxb6XecjnQH5mV2gE1vO-9avtspgWLxJTG8Xu-DEW1sr_i4h5swRY9SUASFW-zE2aRs/exec';
 const URLS_PREDETERMINADAS_ANTERIORES = new Set([
+  'https://script.google.com/macros/s/AKfycbzNc5k6vQBXXjlnaWsu7Mjdu9QlW7z3oDsXLZUUA3cccYXjbAL_ZIZs17MDm5KBkWEA/exec',
   'https://script.google.com/macros/s/AKfycbyOMhY3Fr-UEjJJVQ66UStBJa4ieeOhBnKfJYFD2hsuud9TvF7w1zu4PYs0o1LWyIuM/exec',
   'https://script.google.com/macros/s/AKfycby2PyREewpwwiTkPXoceYlAUsH2pzDYbMMtZ3c6EVP0Oc_eE-7-otfUdoeSlgGLVCb0/exec',
   'https://script.google.com/macros/s/AKfycbzEND2XJJ0dKOW6EnG8OIfhTs7cwYNHjGKIp5ub9a1VxnLnNY6sgHn42TjncgXs38JN/exec',
@@ -26,6 +27,242 @@ export function migrarUrlPredeterminada(url = '') {
   return !actual || URLS_PREDETERMINADAS_ANTERIORES.has(actual)
     ? URL_PREDETERMINADA
     : actual;
+}
+
+function revisionPendienteDe(revisiones, idClub) {
+  const revision = Number(revisiones?.get(idClub));
+  return Number.isFinite(revision) && revision >= 0 ? revision : 0;
+}
+
+/**
+ * Toma una foto de la revisión local de cada club antes de iniciar un envío.
+ * Así una respuesta lenta no puede confirmar cambios que se hicieron después.
+ */
+export function capturarRevisionesPendientes(revisiones = new Map(), idsClub = []) {
+  const captura = new Map();
+  for (const idClub of new Set(idsClub || [])) {
+    if (idClub) captura.set(idClub, revisionPendienteDe(revisiones, idClub));
+  }
+  return captura;
+}
+
+/**
+ * Quita de la cola únicamente los clubes que no cambiaron mientras estaban
+ * viajando. Si entró otro QR durante el POST, el club completo queda pendiente
+ * para un segundo envío y ninguna de sus celdas se pierde.
+ */
+export function confirmarPendientesAplicados(
+  aplicados = [],
+  revisionesEnviadas = new Map(),
+  revisionesActuales = new Map(),
+  pendientes = new Set(),
+  eventosPendientes = new Map()
+) {
+  const confirmados = [];
+  const conservados = [];
+  for (const idClub of new Set(aplicados || [])) {
+    const fueEnviado = revisionesEnviadas.has(idClub);
+    const sinCambiosNuevos = fueEnviado
+      && revisionPendienteDe(revisionesActuales, idClub)
+        === revisionPendienteDe(revisionesEnviadas, idClub);
+    if (!sinCambiosNuevos) {
+      conservados.push(idClub);
+      continue;
+    }
+    pendientes.delete(idClub);
+    eventosPendientes.delete(idClub);
+    revisionesActuales.delete(idClub);
+    confirmados.push(idClub);
+  }
+  return { confirmados, conservados };
+}
+
+/** Indica si un cambio nuevo quedó esperando mientras otra sincronización corría. */
+export function debeReprogramarSincronizacion(versionInicial, versionActual, cantidadPendientes) {
+  return Number(cantidadPendientes) > 0
+    && Number(versionInicial) !== Number(versionActual);
+}
+
+function puntajeNumerico(valor) {
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+/** Agrega el detalle calculado a una celda por código de evento. */
+export function puntajesDesdeDetalle(detalle = [], codigos = []) {
+  const valores = Object.fromEntries((codigos || []).map(codigo => [codigo, 0]));
+  for (const fila of detalle || []) {
+    const codigo = fila?.evento?.codigo;
+    if (codigo && Object.prototype.hasOwnProperty.call(valores, codigo)) {
+      valores[codigo] += puntajeNumerico(fila.puntos);
+    }
+  }
+  return valores;
+}
+
+/** Total que debe producir la fórmula de Sheets a partir de sus celdas de eventos. */
+export function totalDesdeEventos(eventos = {}) {
+  const bruto = Object.values(eventos || {})
+    .reduce((total, valor) => total + puntajeNumerico(valor), 0);
+  return Math.max(0, bruto);
+}
+
+/**
+ * Compara el cálculo reconstruido desde Detalle con las celdas de Puntajes.
+ * Devuelve datos suficientes para mostrar y reparar cada diferencia explícitamente.
+ */
+export function diferenciasDePuntajes(locales = {}, remotos = {}, codigos = null) {
+  const lista = codigos == null
+    ? [...new Set([...Object.keys(locales || {}), ...Object.keys(remotos || {})])]
+    : [...new Set(codigos || [])];
+  return lista
+    .filter(Boolean)
+    .map(codigo => ({
+      codigo,
+      local: puntajeNumerico(locales?.[codigo]),
+      remoto: puntajeNumerico(remotos?.[codigo]),
+    }))
+    .filter(diferencia => diferencia.local !== diferencia.remoto);
+}
+
+/** Evita que una caída completa de Detalle convierta toda la matriz en ceros. */
+export function detalleVacioEsDestructivo(cantidadEscaneos, diferencias = []) {
+  return Number(cantidadEscaneos) === 0
+    && (diferencias || []).some(d => puntajeNumerico(d?.local) === 0
+      && puntajeNumerico(d?.remoto) !== 0);
+}
+
+/**
+ * Protege la copia local si la respuesta perdió todo Detalle.
+ * `cantidadLocal` debe excluir los clubes con cambios pendientes, porque esos se
+ * conservan deliberadamente mientras el evaluador decide si subirlos o descartarlos.
+ */
+export function detalleRemotoVacioEsSospechoso(
+  cantidadLocal,
+  escaneosRemotos = []
+) {
+  return Number(cantidadLocal) > 0
+    && Array.isArray(escaneosRemotos)
+    && escaneosRemotos.length === 0;
+}
+
+/**
+ * Un GET no puede reemplazar clubes que tienen un cambio pendiente ni aquellos
+ * cuya escritura local todavía está en curso y aún no llegó a la cola de envío.
+ */
+export function clubesProtegidosParaLectura(pendientes = new Set(), mutaciones = new Map()) {
+  const protegidos = new Set(pendientes || []);
+  const idsEnMutacion = mutaciones instanceof Map ? mutaciones.keys() : (mutaciones || []);
+  for (const idClub of idsEnMutacion) {
+    if (idClub) protegidos.add(idClub);
+  }
+  return protegidos;
+}
+
+/** Normaliza las huellas de Detalle devueltas por la API v3. */
+export function normalizarRevisionesDetalle(revisiones = {}) {
+  const mapa = new Map();
+  const entradas = revisiones instanceof Map
+    ? revisiones
+    : Array.isArray(revisiones)
+      ? revisiones
+      : Object.entries(revisiones || {});
+  for (const [idCrudo, revisionCruda] of entradas) {
+    const idClub = String(idCrudo || '').trim();
+    const revision = String(revisionCruda || '').trim();
+    if (idClub && revision) mapa.set(idClub, revision);
+  }
+  return mapa;
+}
+
+/**
+ * Adopta las huellas nuevas salvo para clubes con trabajo local pendiente.
+ *
+ * En esos clubes se conserva la huella que sirvió de base al cambio local. Si otro
+ * teléfono ya modificó Detalle, el siguiente POST seguirá chocando en vez de poder
+ * reintentar con la huella nueva y reemplazar silenciosamente el snapshot ajeno.
+ * Cuando todavía no existe una huella local (por ejemplo, una caché previa a API 3),
+ * solo se permite tomar la remota si ese club continúa vacío en Detalle. Si ya hay
+ * filas remotas, "Subir" se bloquea porque no existe una base segura para reemplazarlas.
+ */
+export function combinarRevisionesDetalle(
+  actuales = new Map(),
+  remotas = new Map(),
+  protegidos = new Set(),
+  clubesConDetalleRemoto = null
+) {
+  const base = actuales instanceof Map ? actuales : normalizarRevisionesDetalle(actuales);
+  const nuevas = remotas instanceof Map ? remotas : normalizarRevisionesDetalle(remotas);
+  const resultado = new Map(nuevas);
+  const conDetalle = clubesConDetalleRemoto instanceof Set
+    ? clubesConDetalleRemoto
+    : null;
+  for (const idClub of protegidos || []) {
+    if (base.has(idClub)) {
+      resultado.set(idClub, base.get(idClub));
+    } else if (!conDetalle || conDetalle.has(idClub)) {
+      // Una caché anterior a API 3 no sabe de qué snapshot partió. Solo puede
+      // adoptar la huella actual si ese club sigue vacío en el servidor; con
+      // Detalle remoto se bloquea "Subir" y se exige descartar o revisar.
+      resultado.delete(idClub);
+    }
+  }
+  return resultado;
+}
+
+/** Empaqueta las huellas con su endpoint para poder restaurarlas tras una recarga. */
+export function serializarRevisionesDetalle(url = '', revisiones = new Map()) {
+  return {
+    url: String(url || '').trim(),
+    revisiones: [...normalizarRevisionesDetalle(revisiones)],
+  };
+}
+
+/** Solo restaura huellas si pertenecen al mismo Apps Script/planilla. */
+export function restaurarRevisionesDetalle(guardado, urlActual = '') {
+  if (!guardado || typeof guardado !== 'object' || Array.isArray(guardado)) return new Map();
+  if (String(guardado.url || '').trim() !== String(urlActual || '').trim()) return new Map();
+  return normalizarRevisionesDetalle(guardado.revisiones);
+}
+
+/**
+ * Una respuesta POST aceptada trae la huella exacta que dejó bajo el bloqueo.
+ * Debe avanzar aunque haya entrado otro QR durante el viaje: ese segundo cambio
+ * tendrá como base el snapshot que el servidor acaba de confirmar.
+ */
+export function aplicarRevisionesConfirmadas(
+  actuales = new Map(),
+  confirmadas = new Map(),
+  idsAplicados = []
+) {
+  const resultado = new Map(
+    actuales instanceof Map ? actuales : normalizarRevisionesDetalle(actuales)
+  );
+  const nuevas = confirmadas instanceof Map
+    ? confirmadas
+    : normalizarRevisionesDetalle(confirmadas);
+  for (const idClub of new Set(idsAplicados || [])) {
+    if (nuevas.has(idClub)) resultado.set(idClub, nuevas.get(idClub));
+  }
+  return resultado;
+}
+
+/**
+ * La matriz sigue siendo la fuente visible, salvo un conflicto de serial demostrado
+ * por el propio Detalle compartido. En ese caso se muestra el cálculo seguro (0 o la
+ * suma de los stickers válidos) hasta que la matriz se reconcilie.
+ */
+export function aplicarConflictosDeSerial(remotos = {}, locales = {}, detalle = []) {
+  const visibles = { ...(remotos || {}) };
+  const codigos = new Set(
+    (detalle || [])
+      .filter(fila => fila?.estado === 'serial_ajeno' && fila?.evento?.codigo)
+      .map(fila => fila.evento.codigo)
+  );
+  for (const codigo of codigos) {
+    visibles[codigo] = puntajeNumerico(locales?.[codigo]);
+  }
+  return visibles;
 }
 
 /**
@@ -95,7 +332,7 @@ export async function enviar(
 }
 
 /**
- * Prepara la matriz de puntajes en un Apps Script v2. La llamada es idempotente:
+ * Prepara la matriz de puntajes en el Apps Script. La llamada es idempotente:
  * conserva los valores existentes por ID y código de evento.
  */
 export async function preparar(url, clave, padron = [], eventos = []) {
@@ -218,6 +455,7 @@ export function normalizarPuntajes(filas = [], eventos = []) {
       region: String(fila?.region || '').trim(),
       eventos: valores,
       total: Number.isFinite(Number(fila?.total)) ? Number(fila.total) : 0,
+      totalConFormula: fila?.totalConFormula === true,
       revision: Number.isFinite(Number(fila?.revision)) ? Number(fila.revision) : 0,
       actualizado: String(fila?.actualizado || ''),
       evaluador: String(fila?.evaluador || ''),
